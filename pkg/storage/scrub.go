@@ -59,7 +59,7 @@ func (sc StoreController) CheckAllBlobsIntegrity() (ScrubResults, error) {
 		}
 
 		for _, repo := range images {
-			imageResults, err := checkImage(repo, imgStore)
+			imageResults, err := CheckImage(repo, imgStore)
 			if err != nil {
 				return results, err
 			}
@@ -71,7 +71,7 @@ func (sc StoreController) CheckAllBlobsIntegrity() (ScrubResults, error) {
 	return results, nil
 }
 
-func checkImage(imageName string, imgStore ImageStore) ([]ScrubImageResult, error) {
+func CheckImage(imageName string, imgStore ImageStore) ([]ScrubImageResult, error) {
 	results := []ScrubImageResult{}
 
 	dir := path.Join(imgStore.RootDir(), imageName)

@@ -96,7 +96,7 @@ func newScrubCmd(conf *config.Config) *cobra.Command {
 			response, err := http.DefaultClient.Do(req)
 			if err == nil {
 				response.Body.Close()
-				log.Info().Msg("The server is running, in order to perform the scrub command the server should be shut down")
+				log.Warn().Msg("The server is running, in order to perform the scrub command the server should be shut down")
 				panic("Error: server is running")
 			} else {
 				// server is down
@@ -299,6 +299,7 @@ func validateConfiguration(config *config.Config) error {
 
 func applyDefaultValues(config *config.Config, viperInstance *viper.Viper) {
 	defaultVal := true
+	defaultInterval := 24 * time.Hour // nolint: gomnd
 
 	if config.Extensions == nil && viperInstance.Get("extensions") != nil {
 		config.Extensions = &extconf.ExtensionConfig{}
@@ -317,6 +318,13 @@ func applyDefaultValues(config *config.Config, viperInstance *viper.Viper) {
 			// we found a config like `"extensions": {"search": {}}`
 			// Note: In case search is not empty the config.Extensions will not be nil and we will not reach here
 			config.Extensions.Search = &extconf.SearchConfig{}
+		}
+
+		_, ok = extMap["scrub"]
+		if ok {
+			// we found a config like `"extensions": {"scrub": {}}`
+			// Note: In case scrub is not empty the config.Extensions will not be nil and we will not reach here
+			config.Extensions.Scrub = &extconf.ScrubConfig{}
 		}
 	}
 
@@ -339,7 +347,7 @@ func applyDefaultValues(config *config.Config, viperInstance *viper.Viper) {
 			}
 
 			if config.Extensions.Search.CVE == nil {
-				config.Extensions.Search.CVE = &extconf.CVEConfig{UpdateInterval: 24 * time.Hour} // nolint: gomnd
+				config.Extensions.Search.CVE = &extconf.CVEConfig{UpdateInterval: defaultInterval}
 			}
 		}
 
@@ -350,6 +358,16 @@ func applyDefaultValues(config *config.Config, viperInstance *viper.Viper) {
 
 			if config.Extensions.Metrics.Prometheus == nil {
 				config.Extensions.Metrics.Prometheus = &extconf.PrometheusConfig{Path: "/metrics"}
+			}
+		}
+
+		if config.Extensions.Scrub != nil {
+			if config.Extensions.Scrub.Enable == nil {
+				config.Extensions.Scrub.Enable = &defaultVal
+			}
+
+			if config.Extensions.Scrub.Interval == 0 {
+				config.Extensions.Scrub.Interval = defaultInterval
 			}
 		}
 	}
