@@ -250,11 +250,11 @@ jobs:
       - name: Update appVersion
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.appVersion = ${{ github.event.release.tag_name }}' 'helm/zot/Chart.yaml'
+          cmd: yq -i '.appVersion = "${{ github.event.release.tag_name }}"' 'helm/zot/Chart.yaml'
       - name: Update image tag
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.image.tag = ${{ github.event.release.tag_name }}' 'helm/zot/values.yaml'
+          cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm/zot/values.yaml'
       - name: Push changes
         run: |
           git config --global user.name '${{ github.actor }}'
