@@ -11,14 +11,4 @@ entries:
     urls:
     - https://github.com/Andreea-Lupu/zot/releases/download/zot-0.1.1/zot-0.1.1.tgz
     version: 0.1.1
-  - apiVersion: v2
-    appVersion: v1.3.9
-    created: "2022-05-18T14:09:20.790438126Z"
-    description: A Helm chart for Kubernetes
-    digest: 7705a966561a73e92ccdbe4dd6fbe5cba6c66561faa7e8eb4a3ebd4974a86913
-    name: zot
-    type: application
-    urls:
-    - https://github.com/Andreea-Lupu/zot/releases/download/zot-0.1.0/zot-0.1.0.tgz
-    version: 0.1.0
 generated: "2022-05-18T14:09:20.790446126Z"
