@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - main
+      - update-helm-chart
   pull_request:
     branches:
       - main
