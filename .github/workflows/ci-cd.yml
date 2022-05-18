@@ -264,6 +264,16 @@ jobs:
           git config --global user.email 'github-actions@users.noreply.github.com'
           git commit -am "Automated update of Helm Chart"
           git push
+      - name: Install Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.8.1
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.4.0
+        with:
+          charts_dir: helm/zot
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
   helm-chart-release:
     runs-on: ubuntu-latest
