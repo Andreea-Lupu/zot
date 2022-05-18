@@ -258,6 +258,17 @@ jobs:
         uses: mikefarah/yq@master
         with:
           cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm/zot/values.yaml'
+      - name: Install Helm
+        uses: azure/setup-helm@v1
+        with:
+          version: v3.8.1
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.4.0
+        with:
+          charts_dir: helm
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
       - name: Push changes
         run: |
           git config --global user.name 'github-actions'
@@ -268,12 +279,6 @@ jobs:
         uses: azure/setup-helm@v1
         with:
           version: v3.8.1
-      - name: Run chart-releaser
-        run: |
-          mkdir zot-release
-          helm package helm
-          mv
-
   helm-chart-release:
     runs-on: ubuntu-latest
     steps:
