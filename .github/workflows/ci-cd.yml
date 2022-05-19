@@ -264,7 +264,7 @@ jobs:
           cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm/zot/values.yaml'
       - name: Update version
         run: |
-          sudo apt-get install py-pip
+          sudo apt-get install pip
           pip install pybump
           pybump bump --file helm/zot/Chart.yaml --level patch
       - name: Push changes
