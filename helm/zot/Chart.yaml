@@ -1,6 +1,6 @@
 apiVersion: v2
-appVersion: v1.3.17-update-helm-chart
+appVersion: v1.3.18-update-helm-chart
 description: A Helm chart for Kubernetes
 name: zot
 type: application
-version: 0.1.4
+version: 0.1.5
