@@ -279,6 +279,7 @@ jobs:
         uses: helm/chart-releaser-action@v1.4.0
         with:
           charts_dir: helm
+          charts_repo_url: https://github.com/Andreea-Lupu/zot/tree/gh-pages
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
