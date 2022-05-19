@@ -250,6 +250,10 @@ jobs:
         with:
           ref: update-helm-chart
           fetch-depth: '0'
+      - name: Configure Git
+        run: |
+          git config user.name 'github-actions'
+          git config user.email 'github-actions@users.noreply.github.com'
       - name: Update appVersion
         uses: mikefarah/yq@master
         with:
@@ -258,7 +262,10 @@ jobs:
         uses: mikefarah/yq@master
         with:
           cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm/zot/values.yaml'
-      - name: Install Helm
+      - name: Push changes
+        run: |
+          git commit -am "Automated update of Helm Chart"
+          git push- name: Install Helm
         uses: azure/setup-helm@v1
         with:
           version: v3.8.1
@@ -268,12 +275,7 @@ jobs:
           charts_dir: helm
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Push changes
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@users.noreply.github.com'
-          git commit -am "Automated update of Helm Chart"
-          git push
+
   helm-chart-release:
     runs-on: ubuntu-latest
     steps:
