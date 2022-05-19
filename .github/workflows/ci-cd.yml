@@ -262,6 +262,11 @@ jobs:
         uses: mikefarah/yq@master
         with:
           cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm/zot/values.yaml'
+      - name: Update version
+        run: |
+          sudo apt-get install py-pip
+          pip install pybump
+          pybump bump --file helm/zot/Chart.yaml --level patch
       - name: Push changes
         run: |
           git commit -am "Automated update of Helm Chart"
