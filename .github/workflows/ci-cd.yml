@@ -254,7 +254,7 @@ jobs:
         run: |
           git config user.name 'github-actions'
           git config user.email 'github-actions@users.noreply.github.com'
-      - name: Update appVersion
+      - name: Update appVersion inline
         uses: mikefarah/yq@master
         with:
           cmd: yq -i '.appVersion = "${{ github.event.release.tag_name }}"' 'helm/zot/Chart.yaml'
