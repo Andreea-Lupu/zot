@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   zot:
   - apiVersion: v2
+    appVersion: v.1.3.21-update-helm-chart
+    created: "2022-05-19T09:59:17.702365219Z"
+    description: A Helm chart for Kubernetes
+    digest: f01fc8fa61ccfa0fb011abd2f405c713b859e5bc59362b21d8c0dcfd07b13ac0
+    name: zot
+    type: application
+    urls:
+    - https://github.com/Andreea-Lupu/zot/releases/download/zot-0.1.3/zot-0.1.3.tgz
+    version: 0.1.3
+  - apiVersion: v2
     appVersion: v0.1.2-helm-chart
     created: "2022-05-18T12:48:12.102461455Z"
     description: A Helm chart for Kubernetes
@@ -21,4 +31,4 @@ entries:
     urls:
     - https://github.com/Andreea-Lupu/zot/releases/download/zot-0.1.0/zot-0.1.0.tgz
     version: 0.1.0
-generated: "2022-05-19T08:17:09.848437622Z"
+generated: "2022-05-19T09:59:17.70248922Z"
