@@ -252,7 +252,7 @@ jobs:
           fetch-depth: '0'
 
       - name: Checkout project-zot/helm-chart
-        uses: actions/checkout@master
+        uses: actions/checkout@v2
         with:
           repository: Andreea-Lupu/helm-chart-zot
           ref: master
