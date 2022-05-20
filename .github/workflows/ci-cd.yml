@@ -257,7 +257,7 @@ jobs:
           repository: Andreea-Lupu/helm-chart-zot
           ref: master
           fetch-depth: '0'
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PUSH_TOKEN }}
           path: ./helm-chart-zot
 
       - name: Configure Git
