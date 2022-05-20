@@ -250,6 +250,16 @@ jobs:
         with:
           ref: update-helm-chart
           fetch-depth: '0'
+
+      - name: Checkout project-zot/helm-chart
+        uses: actions/checkout@master
+        with:
+          repository: Andreea-Lupu/helm-chart-zot
+          ref: master
+          fetch-depth: '0'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: ./helm-chart-zot
+
       - name: Configure Git
         run: |
           git config user.name 'github-actions'
@@ -257,53 +267,18 @@ jobs:
       - name: Update appVersion
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.appVersion = "${{ github.event.release.tag_name }}"' 'helm/zot/Chart.yaml'
+          cmd: yq -i '.appVersion = "${{ github.event.release.tag_name }}"' 'helm-chart-zot/helm/zot/Chart.yaml'
       - name: Update image tag
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm/zot/values.yaml'
+          cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm-chart-zot/helm/zot/values.yaml'
       - name: Update version
         run: |
           sudo apt-get install pip
           pip install pybump
-          pybump bump --file helm/zot/Chart.yaml --level patch
+          pybump bump --file helm-chart-zot/helm/zot/Chart.yaml --level patch
       - name: Push changes
         run: |
+          cd ./helm-chart-zot
           git commit -am "Automated update of Helm Chart"
           git push
-      - name: Install Helm
-        uses: azure/setup-helm@v1
-        with:
-          version: v3.8.1
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.4.0
-        with:
-          charts_dir: helm
-          charts_repo_url: https://github.com/Andreea-Lupu/zot/tree/gh-pages
-        env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-
-  helm-chart-release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Configure Git
-        run: |
-          git config user.name 'github-actions'
-          git config user.email 'github-actions@users.noreply.github.com'
-
-      - name: Install Helm
-        uses: azure/setup-helm@v1
-        with:
-          version: v3.8.1
-
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.4.0
-        with:
-          charts_dir: helm
-        env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
