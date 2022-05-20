@@ -277,7 +277,7 @@ jobs:
           sudo apt-get install pip
           pip install pybump
           pybump bump --file helm-chart-zot/helm/zot/Chart.yaml --level patch
-      - name: Push changes
+      - name: Push changes to helm-chart-zot
         run: |
           cd ./helm-chart-zot
           git commit -am "Automated update of Helm Chart"
