@@ -308,7 +308,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          ref: main
+          ref: update-helm-chart
           fetch-depth: '0'
 
       - name: Checkout project-zot/helm-charts
