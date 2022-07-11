@@ -1,5 +1,5 @@
-//go:build minimal
-// +build minimal
+//go:build !metrics
+// +build !metrics
 
 // nolint: varnamelen,forcetypeassert
 package monitoring
@@ -116,7 +116,9 @@ func (ms *metricServer) ReceiveMetrics() interface{} {
 	return <-ms.cacheChan
 }
 
-func (ms *metricServer) IsEnabled() (b bool) {
+func (ms *metricServer) IsEnabled() bool {
+	b := false
+
 	// send a bool value on the request channel to avoid data race
 	ms.reqChan <- b
 

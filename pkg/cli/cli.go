@@ -1,5 +1,5 @@
-//go:build extended
-// +build extended
+//go:build ui_base || search
+// +build ui_base search
 
 package cli
 
@@ -9,4 +9,5 @@ func enableCli(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(NewConfigCommand())
 	rootCmd.AddCommand(NewImageCommand(NewSearchService()))
 	rootCmd.AddCommand(NewCveCommand(NewSearchService()))
+	rootCmd.AddCommand(NewRepoCommand(NewSearchService()))
 }

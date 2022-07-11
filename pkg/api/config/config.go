@@ -7,9 +7,7 @@ import (
 	"github.com/getlantern/deepcopy"
 	distspec "github.com/opencontainers/distribution-spec/specs-go"
 	"github.com/spf13/viper"
-	"zotregistry.io/zot/errors"
 	extconf "zotregistry.io/zot/pkg/extensions/config"
-	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/storage"
 )
 
@@ -142,7 +140,7 @@ func New() *Config {
 		Commit:          Commit,
 		BinaryType:      BinaryType,
 		Storage:         GlobalStorageConfig{GC: true, GCDelay: storage.DefaultGCDelay, Dedupe: true},
-		HTTP:            HTTPConfig{Address: "127.0.0.1", Port: "8080"},
+		HTTP:            HTTPConfig{Address: "127.0.0.1", Port: "8080", Auth: &AuthConfig{FailDelay: 0}},
 		Log:             &LogConfig{Level: "debug"},
 	}
 }
@@ -165,20 +163,6 @@ func (c *Config) Sanitize() *Config {
 	}
 
 	return sanitizedConfig
-}
-
-func (c *Config) Validate(log log.Logger) error {
-	// LDAP configuration
-	if c.HTTP.Auth != nil && c.HTTP.Auth.LDAP != nil {
-		l := c.HTTP.Auth.LDAP
-		if l.UserAttribute == "" {
-			log.Error().Str("userAttribute", l.UserAttribute).Msg("invalid LDAP configuration")
-
-			return errors.ErrLDAPConfig
-		}
-	}
-
-	return nil
 }
 
 // LoadAccessControlConfig populates config.AccessControl struct with values from config.

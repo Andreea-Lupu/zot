@@ -17,6 +17,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path"
 	"sort"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	notreg "github.com/notaryproject/notation/pkg/registry"
+	"github.com/opencontainers/distribution-spec/specs-go/v1/extensions"
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	artifactspec "github.com/oras-project/artifacts-spec/specs-go/v1"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -57,12 +59,19 @@ func allowedMethods(method string) []string {
 // nolint: contextcheck
 func (rh *RouteHandler) SetupRoutes() {
 	rh.c.Router.Use(AuthHandler(rh.c))
-	// authz is being enabled because authn is found
-	if rh.c.Config.AccessControl != nil && !isBearerAuthEnabled(rh.c.Config) && isAuthnEnabled(rh.c.Config) {
-		rh.c.Log.Info().Msg("access control is being enabled")
+	// authz is being enabled if AccessControl is specified
+	// if Authn is not present AccessControl will have only default policies
+	if rh.c.Config.AccessControl != nil && !isBearerAuthEnabled(rh.c.Config) {
+		if isAuthnEnabled(rh.c.Config) {
+			rh.c.Log.Info().Msg("access control is being enabled")
+		} else {
+			rh.c.Log.Info().Msg("default policy only access control is being enabled")
+		}
+
 		rh.c.Router.Use(AuthzHandler(rh.c))
 	}
 
+	// https://github.com/opencontainers/distribution-spec/blob/main/spec.md#endpoints
 	prefixedRouter := rh.c.Router.PathPrefix(constants.RoutePrefix).Subrouter()
 	{
 		prefixedRouter.HandleFunc(fmt.Sprintf("/{name:%s}/tags/list", NameRegexp.String()),
@@ -91,8 +100,10 @@ func (rh *RouteHandler) SetupRoutes() {
 			rh.UpdateBlobUpload).Methods("PUT")
 		prefixedRouter.HandleFunc(fmt.Sprintf("/{name:%s}/blobs/uploads/{session_id}", NameRegexp.String()),
 			rh.DeleteBlobUpload).Methods("DELETE")
-		prefixedRouter.HandleFunc("/_catalog",
+		prefixedRouter.HandleFunc(constants.ExtCatalogPrefix,
 			rh.ListRepositories).Methods(allowedMethods("GET")...)
+		prefixedRouter.HandleFunc(constants.ExtOciDiscoverPrefix,
+			rh.ListExtensions).Methods(allowedMethods("GET")...)
 		prefixedRouter.HandleFunc("/",
 			rh.CheckVersionSupport).Methods(allowedMethods("GET")...)
 	}
@@ -110,7 +121,8 @@ func (rh *RouteHandler) SetupRoutes() {
 			prefixedRouter.HandleFunc("/metrics", rh.GetMetrics).Methods("GET")
 		} else {
 			// extended build
-			ext.SetupRoutes(rh.c.Config, rh.c.Router, rh.c.StoreController, rh.c.Log)
+			ext.SetupMetricsRoutes(rh.c.Config, rh.c.Router, rh.c.StoreController, rh.c.Log)
+			ext.SetupSearchRoutes(rh.c.Config, rh.c.Router, rh.c.StoreController, rh.c.Log)
 		}
 	}
 }
@@ -328,6 +340,10 @@ func (rh *RouteHandler) CheckManifest(response http.ResponseWriter, request *htt
 // NOTE: https://github.com/swaggo/swag/issues/387.
 type ImageManifest struct {
 	ispec.Manifest
+}
+
+type ExtensionList struct {
+	extensions.ExtensionList
 }
 
 // GetManifest godoc
@@ -745,14 +761,14 @@ func (rh *RouteHandler) CreateBlobUpload(response http.ResponseWriter, request *
 				return
 			}
 
-			response.Header().Set("Location", path.Join(request.URL.String(), upload))
+			response.Header().Set("Location", getBlobUploadSessionLocation(request.URL, upload))
 			response.Header().Set("Range", "bytes=0-0")
 			response.WriteHeader(http.StatusAccepted)
 
 			return
 		}
 
-		response.Header().Set("Location", fmt.Sprintf("/v2/%s/blobs/%s", name, mountDigests[0]))
+		response.Header().Set("Location", getBlobUploadLocation(request.URL, name, mountDigests[0]))
 		response.WriteHeader(http.StatusCreated)
 
 		return
@@ -812,7 +828,7 @@ func (rh *RouteHandler) CreateBlobUpload(response http.ResponseWriter, request *
 			return
 		}
 
-		response.Header().Set("Location", fmt.Sprintf("/v2/%s/blobs/%s", name, digest))
+		response.Header().Set("Location", getBlobUploadLocation(request.URL, name, digest))
 		response.Header().Set(constants.BlobUploadUUID, sessionID)
 		response.WriteHeader(http.StatusCreated)
 
@@ -831,7 +847,7 @@ func (rh *RouteHandler) CreateBlobUpload(response http.ResponseWriter, request *
 		return
 	}
 
-	response.Header().Set("Location", path.Join(request.URL.String(), upload))
+	response.Header().Set("Location", getBlobUploadSessionLocation(request.URL, upload))
 	response.Header().Set("Range", "bytes=0-0")
 	response.WriteHeader(http.StatusAccepted)
 }
@@ -890,7 +906,7 @@ func (rh *RouteHandler) GetBlobUpload(response http.ResponseWriter, request *htt
 		return
 	}
 
-	response.Header().Set("Location", path.Join(request.URL.String(), sessionID))
+	response.Header().Set("Location", getBlobUploadSessionLocation(request.URL, sessionID))
 	response.Header().Set("Range", fmt.Sprintf("bytes=0-%d", size-1))
 	response.WriteHeader(http.StatusNoContent)
 }
@@ -949,14 +965,6 @@ func (rh *RouteHandler) PatchBlobUpload(response http.ResponseWriter, request *h
 			return
 		}
 
-		contentRange := request.Header.Get("Content-Range")
-		if contentRange == "" {
-			rh.c.Log.Warn().Str("actual", request.Header.Get("Content-Range")).Msg("invalid content range")
-			response.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
-
-			return
-		}
-
 		var from, to int64
 		if from, to, err = getContentRange(request); err != nil || (to-from)+1 != contentLength {
 			response.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
@@ -990,7 +998,7 @@ func (rh *RouteHandler) PatchBlobUpload(response http.ResponseWriter, request *h
 		return
 	}
 
-	response.Header().Set("Location", request.URL.String())
+	response.Header().Set("Location", getBlobUploadSessionLocation(request.URL, sessionID))
 	response.Header().Set("Range", fmt.Sprintf("bytes=0-%d", clen-1))
 	response.Header().Set("Content-Length", "0")
 	response.Header().Set(constants.BlobUploadUUID, sessionID)
@@ -1133,7 +1141,7 @@ finish:
 		return
 	}
 
-	response.Header().Set("Location", fmt.Sprintf("/v2/%s/blobs/%s", name, digest))
+	response.Header().Set("Location", getBlobUploadLocation(request.URL, name, digest))
 	response.Header().Set("Content-Length", "0")
 	response.Header().Set(constants.DistContentDigestKey, digest)
 	response.WriteHeader(http.StatusCreated)
@@ -1249,6 +1257,19 @@ func (rh *RouteHandler) ListRepositories(response http.ResponseWriter, request *
 	is := RepositoryList{Repositories: repos}
 
 	WriteJSON(response, http.StatusOK, is)
+}
+
+// ListExtensions godoc
+// @Summary List Registry level extensions
+// @Description List all extensions present on registry
+// @Accept  json
+// @Produce json
+// @Success 200 {object} 	api.ExtensionList
+// @Router /v2/_oci/ext/discover [get].
+func (rh *RouteHandler) ListExtensions(w http.ResponseWriter, r *http.Request) {
+	extensionList := ext.GetExtensions(rh.c.Config)
+
+	WriteJSON(w, http.StatusOK, extensionList)
 }
 
 func (rh *RouteHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
@@ -1445,4 +1466,32 @@ func (rh *RouteHandler) GetReferrers(response http.ResponseWriter, request *http
 	rs := ReferenceList{References: refs}
 
 	WriteJSON(response, http.StatusOK, rs)
+}
+
+// GetBlobUploadSessionLocation returns actual blob location to start/resume uploading blobs.
+// e.g. /v2/<name>/blobs/uploads/<session-id>.
+func getBlobUploadSessionLocation(url *url.URL, sessionID string) string {
+	url.RawQuery = ""
+
+	if !strings.Contains(url.Path, sessionID) {
+		url.Path = path.Join(url.Path, sessionID)
+	}
+
+	return url.String()
+}
+
+// GetBlobUploadLocation returns actual blob location on registry
+// e.g /v2/<name>/blobs/<digest>.
+func getBlobUploadLocation(url *url.URL, name, digest string) string {
+	url.RawQuery = ""
+
+	// we are relying on request URL to set location and
+	// if request URL contains uploads either we are resuming blob upload or starting a new blob upload.
+	// getBlobUploadLocation will be called only when blob upload is completed and
+	// location should be set as blob url <v2/<name>/blobs/<digest>>.
+	if strings.Contains(url.Path, "uploads") {
+		url.Path = path.Join(constants.RoutePrefix, name, constants.Blobs, digest)
+	}
+
+	return url.String()
 }

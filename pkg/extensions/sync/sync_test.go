@@ -1,5 +1,5 @@
-//go:build extended
-// +build extended
+//go:build sync
+// +build sync
 
 package sync_test
 
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -37,6 +38,7 @@ import (
 	"gopkg.in/resty.v1"
 	"zotregistry.io/zot/pkg/api"
 	"zotregistry.io/zot/pkg/api/config"
+	"zotregistry.io/zot/pkg/api/constants"
 	"zotregistry.io/zot/pkg/cli"
 	extconf "zotregistry.io/zot/pkg/extensions/config"
 	"zotregistry.io/zot/pkg/extensions/sync"
@@ -249,6 +251,109 @@ func startDownstreamServer(
 	}
 
 	return dctlr, destBaseURL, destDir, client
+}
+
+func TestORAS(t *testing.T) {
+	Convey("Verify sync on demand for oras objects", t, func() {
+		sctlr, srcBaseURL, _, _, srcClient := startUpstreamServer(t, false, false)
+
+		test.WaitTillServerReady(srcBaseURL)
+
+		defer func() {
+			sctlr.Shutdown()
+		}()
+
+		content := []byte("{\"name\":\"foo\",\"value\":\"bar\"}")
+
+		fileDir := t.TempDir()
+
+		err := os.WriteFile(path.Join(fileDir, "config.json"), content, 0o600)
+		if err != nil {
+			panic(err)
+		}
+
+		content = []byte("helloworld")
+
+		err = os.WriteFile(path.Join(fileDir, "artifact.txt"), content, 0o600)
+		if err != nil {
+			panic(err)
+		}
+
+		cmd := exec.Command("oras", "version")
+
+		err = cmd.Run()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(fileDir)
+
+		srcURL := strings.Join([]string{sctlr.Server.Addr, "/oras-artifact:v2"}, "")
+
+		cmd = exec.Command("oras", "push", srcURL, "--manifest-config",
+			"config.json:application/vnd.acme.rocket.config.v1+json", "artifact.txt:text/plain", "-d", "-v")
+		cmd.Dir = fileDir
+
+		// Pushing ORAS artifact to upstream
+		err = cmd.Run()
+		So(err, ShouldBeNil)
+
+		var tlsVerify bool
+
+		regex := ".*"
+
+		syncRegistryConfig := sync.RegistryConfig{
+			Content: []sync.Content{
+				{
+					Prefix: "oras-artifact",
+					Tags: &sync.Tags{
+						Regex: &regex,
+					},
+				},
+			},
+			URLs:      []string{srcBaseURL},
+			TLSVerify: &tlsVerify,
+			CertDir:   "",
+			OnDemand:  true,
+		}
+
+		defaultVal := true
+		syncConfig := &sync.Config{
+			Enable:     &defaultVal,
+			Registries: []sync.RegistryConfig{syncRegistryConfig},
+		}
+
+		dctlr, destBaseURL, _, destClient := startDownstreamServer(t, false, syncConfig)
+
+		test.WaitTillServerReady(destBaseURL)
+
+		defer func() {
+			dctlr.Shutdown()
+		}()
+
+		resp, _ := srcClient.R().Get(srcBaseURL + "/v2/" + "oras-artifact" + "/manifests/v2")
+		So(resp, ShouldNotBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+
+		resp, err = destClient.R().Get(destBaseURL + "/v2/" + "oras-artifact" + "/manifests/v2")
+		So(err, ShouldBeNil)
+		So(resp.StatusCode(), ShouldEqual, 200)
+
+		destURL := strings.Join([]string{dctlr.Server.Addr, "/oras-artifact:v2"}, "")
+		cmd = exec.Command("oras", "pull", destURL, "-d", "-v", "-a")
+		destDir := t.TempDir()
+		cmd.Dir = destDir
+		// pulling oras artifact from dest server
+		err = cmd.Run()
+		So(err, ShouldBeNil)
+
+		cmd = exec.Command("grep", "helloworld", "artifact.txt")
+		cmd.Dir = destDir
+		output, err := cmd.CombinedOutput()
+
+		So(err, ShouldBeNil)
+		So(string(output), ShouldContainSubstring, "helloworld")
+	})
 }
 
 func TestOnDemand(t *testing.T) {
@@ -1315,11 +1420,11 @@ func TestNoImagesByRegex(t *testing.T) {
 			dctlr.Shutdown()
 		}()
 
-		resp, err := destClient.R().Get(destBaseURL + "/v2/" + testImage + "/manifests/" + testImageTag)
+		resp, err := destClient.R().Get(destBaseURL + constants.RoutePrefix + testImage + "/manifests/" + testImageTag)
 		So(err, ShouldBeNil)
 		So(resp.StatusCode(), ShouldEqual, 404)
 
-		resp, err = destClient.R().Get(destBaseURL + "/v2/_catalog")
+		resp, err = destClient.R().Get(destBaseURL + constants.RoutePrefix + constants.ExtCatalogPrefix)
 		So(err, ShouldBeNil)
 		So(resp, ShouldNotBeEmpty)
 		So(resp.StatusCode(), ShouldEqual, 200)
@@ -1743,7 +1848,7 @@ func TestSubPaths(t *testing.T) {
 		var destTagsList TagsList
 
 		for {
-			resp, err := resty.R().Get(destBaseURL + "/v2" + path.Join(subpath, testImage) + "/tags/list")
+			resp, err := resty.R().Get(destBaseURL + constants.RoutePrefix + path.Join(subpath, testImage) + "/tags/list")
 			if err != nil {
 				panic(err)
 			}
@@ -2169,7 +2274,7 @@ func TestPeriodicallySignaturesErr(t *testing.T) {
 			cosignTag := string(imageManifestDigest.Algorithm()) + "-" + imageManifestDigest.Hex() +
 				"." + remote.SignatureTagSuffix
 
-			getCosignManifestURL := srcBaseURL + path.Join("/v2", repoName, "manifests", cosignTag)
+			getCosignManifestURL := srcBaseURL + path.Join(constants.RoutePrefix, repoName, "manifests", cosignTag)
 			mResp, err := resty.R().Get(getCosignManifestURL)
 			So(err, ShouldBeNil)
 
@@ -2444,7 +2549,7 @@ func TestSignatures(t *testing.T) {
 		// test cosign signatures errors
 		// based on manifest digest get cosign manifest
 		cosignEncodedDigest := strings.Replace(digest.String(), ":", "-", 1) + ".sig"
-		getCosignManifestURL := srcBaseURL + path.Join("/v2", repoName, "manifests", cosignEncodedDigest)
+		getCosignManifestURL := srcBaseURL + path.Join(constants.RoutePrefix, repoName, "manifests", cosignEncodedDigest)
 
 		mResp, err := resty.R().Get(getCosignManifestURL)
 		So(err, ShouldBeNil)
@@ -3057,7 +3162,7 @@ func TestSignaturesOnDemand(t *testing.T) {
 
 		// test negative case
 		cosignEncodedDigest := strings.Replace(digest.String(), ":", "-", 1) + ".sig"
-		getCosignManifestURL := srcBaseURL + path.Join("/v2", repoName, "manifests", cosignEncodedDigest)
+		getCosignManifestURL := srcBaseURL + path.Join(constants.RoutePrefix, repoName, "manifests", cosignEncodedDigest)
 
 		mResp, err := resty.R().Get(getCosignManifestURL)
 		So(err, ShouldBeNil)
@@ -3270,6 +3375,7 @@ func TestSyncOnlyDiff(t *testing.T) {
 		destConfig.Extensions = &extconf.ExtensionConfig{}
 		destConfig.Extensions.Search = nil
 		destConfig.Extensions.Sync = syncConfig
+		destConfig.Log.Output = path.Join(destDir, "sync.log")
 
 		dctlr := api.NewController(destConfig)
 
@@ -3286,32 +3392,18 @@ func TestSyncOnlyDiff(t *testing.T) {
 			dctlr.Shutdown()
 		}()
 
-		// watch .sync subdir, shouldn't be populated
-		done := make(chan bool)
-		var isPopulated bool
-		go func() {
-			for {
-				select {
-				case <-done:
-					return
-				default:
-					_, err := os.ReadDir(path.Join(destDir, testImage, ".sync"))
-					if err == nil {
-						isPopulated = true
-					}
-					time.Sleep(200 * time.Millisecond)
-				}
-			}
-		}()
-
 		resp, err := resty.R().Get(destBaseURL + "/v2/" + testImage + "/manifests/" + testImageTag)
 		So(err, ShouldBeNil)
 		So(resp.StatusCode(), ShouldEqual, 200)
 
 		time.Sleep(3 * time.Second)
 
-		done <- true
-		So(isPopulated, ShouldBeFalse)
+		body, err := ioutil.ReadFile(path.Join(destDir, "sync.log"))
+		if err != nil {
+			log.Fatalf("unable to read file: %v", err)
+		}
+
+		So(string(body), ShouldContainSubstring, "already synced image")
 	})
 }
 
@@ -3792,7 +3884,7 @@ func signImage(tdir, port, repoName string, digest godigest.Digest) {
 	// push signatures to upstream server so that we can sync them later
 	// sign the image
 	err := sign.SignCmd(&options.RootOptions{Verbose: true, Timeout: 1 * time.Minute},
-		sign.KeyOpts{KeyRef: path.Join(tdir, "cosign.key"), PassFunc: generate.GetPass},
+		options.KeyOpts{KeyRef: path.Join(tdir, "cosign.key"), PassFunc: generate.GetPass},
 		options.RegistryOptions{AllowInsecure: true},
 		map[string]interface{}{"tag": "1.0"},
 		[]string{fmt.Sprintf("localhost:%s/%s@%s", port, repoName, digest.String())},

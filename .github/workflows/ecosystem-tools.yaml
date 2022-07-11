@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v2
         with:
-          go-version: 1.17.x
+          go-version: 1.18.x
       - name: Install dependencies
         run: |
           cd $GITHUB_WORKSPACE
@@ -44,3 +44,15 @@ jobs:
       - name: Run push-pull tests
         run: |
             make push-pull
+      - name: Run metrics tests
+        run: |
+            make bats-metrics
+      - name: Run cve tests
+        run: |
+            make bats-cve
+      - name: Run sync test
+        run: |
+            make bats-sync
+      - name: Run scrub tests
+        run: |
+            make bats-scrub

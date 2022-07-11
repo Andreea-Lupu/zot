@@ -32,9 +32,12 @@ func getCosignManifest(client *resty.Client, regURL url.URL, repo, digest string
 
 	getCosignManifestURL.RawQuery = getCosignManifestURL.Query().Encode()
 
-	resp, err := client.R().Get(getCosignManifestURL.String())
+	resp, err := client.R().
+		SetHeader("Content-Type", "application/vnd.oci.image.manifest.v1+json").
+		Get(getCosignManifestURL.String())
 	if err != nil {
-		log.Error().Err(err).Str("url", getCosignManifestURL.String()).
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Str("url", getCosignManifestURL.String()).
 			Msgf("couldn't get cosign manifest: %s", cosignTag)
 
 		return nil, err
@@ -46,7 +49,8 @@ func getCosignManifest(client *resty.Client, regURL url.URL, repo, digest string
 
 		return nil, zerr.ErrSyncSignatureNotFound
 	} else if resp.IsError() {
-		log.Error().Err(zerr.ErrSyncSignature).Msgf("couldn't get cosign signature from %s, status code: %d skipping",
+		log.Error().Str("errorType", TypeOf(zerr.ErrSyncSignature)).
+			Err(zerr.ErrSyncSignature).Msgf("couldn't get cosign signature from %s, status code: %d skipping",
 			getCosignManifestURL.String(), resp.StatusCode())
 
 		return nil, zerr.ErrSyncSignature
@@ -54,7 +58,8 @@ func getCosignManifest(client *resty.Client, regURL url.URL, repo, digest string
 
 	err = json.Unmarshal(resp.Body(), &cosignManifest)
 	if err != nil {
-		log.Error().Err(err).Str("url", getCosignManifestURL.String()).
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Str("url", getCosignManifestURL.String()).
 			Msgf("couldn't unmarshal cosign manifest %s", cosignTag)
 
 		return nil, err
@@ -79,7 +84,8 @@ func getNotaryRefs(client *resty.Client, regURL url.URL, repo, digest string, lo
 		SetQueryParam("artifactType", notreg.ArtifactTypeNotation).
 		Get(getReferrersURL.String())
 	if err != nil {
-		log.Error().Err(err).Str("url", getReferrersURL.String()).Msg("couldn't get referrers")
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Str("url", getReferrersURL.String()).Msg("couldn't get referrers")
 
 		return referrers, err
 	}
@@ -90,7 +96,8 @@ func getNotaryRefs(client *resty.Client, regURL url.URL, repo, digest string, lo
 
 		return ReferenceList{}, zerr.ErrSyncSignatureNotFound
 	} else if resp.IsError() {
-		log.Error().Err(zerr.ErrSyncSignature).Msgf("couldn't get notary signature from %s, status code: %d skipping",
+		log.Error().Str("errorType", TypeOf(zerr.ErrSyncSignature)).
+			Err(zerr.ErrSyncSignature).Msgf("couldn't get notary signature from %s, status code: %d skipping",
 			getReferrersURL.String(), resp.StatusCode())
 
 		return ReferenceList{}, zerr.ErrSyncSignature
@@ -98,7 +105,8 @@ func getNotaryRefs(client *resty.Client, regURL url.URL, repo, digest string, lo
 
 	err = json.Unmarshal(resp.Body(), &referrers)
 	if err != nil {
-		log.Error().Err(err).Str("url", getReferrersURL.String()).
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Str("url", getReferrersURL.String()).
 			Msgf("couldn't unmarshal notary signature")
 
 		return referrers, err
@@ -127,7 +135,8 @@ func syncCosignSignature(client *resty.Client, imageStore storage.ImageStore,
 
 		resp, err := client.R().SetDoNotParseResponse(true).Get(getBlobURL.String())
 		if err != nil {
-			log.Error().Err(err).Msgf("couldn't get cosign blob: %s", blob.Digest.String())
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msgf("couldn't get cosign blob: %s", blob.Digest.String())
 
 			return err
 		}
@@ -143,7 +152,8 @@ func syncCosignSignature(client *resty.Client, imageStore storage.ImageStore,
 		// push blob
 		_, _, err = imageStore.FullBlobUpload(localRepo, resp.RawBody(), blob.Digest.String())
 		if err != nil {
-			log.Error().Err(err).Msg("couldn't upload cosign blob")
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msg("couldn't upload cosign blob")
 
 			return err
 		}
@@ -156,7 +166,8 @@ func syncCosignSignature(client *resty.Client, imageStore storage.ImageStore,
 
 	resp, err := client.R().SetDoNotParseResponse(true).Get(getBlobURL.String())
 	if err != nil {
-		log.Error().Err(err).Msgf("couldn't get cosign config blob: %s", getBlobURL.String())
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Msgf("couldn't get cosign config blob: %s", getBlobURL.String())
 
 		return err
 	}
@@ -172,20 +183,23 @@ func syncCosignSignature(client *resty.Client, imageStore storage.ImageStore,
 	// push config blob
 	_, _, err = imageStore.FullBlobUpload(localRepo, resp.RawBody(), cosignManifest.Config.Digest.String())
 	if err != nil {
-		log.Error().Err(err).Msg("couldn't upload cosign config blob")
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Msg("couldn't upload cosign config blob")
 
 		return err
 	}
 
 	cosignManifestBuf, err := json.Marshal(cosignManifest)
 	if err != nil {
-		log.Error().Err(err).Msg("couldn't marshal cosign manifest")
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Msg("couldn't marshal cosign manifest")
 	}
 
 	// push manifest
 	_, err = imageStore.PutImageManifest(localRepo, cosignTag, ispec.MediaTypeImageManifest, cosignManifestBuf)
 	if err != nil {
-		log.Error().Err(err).Msg("couldn't upload cosign manifest")
+		log.Error().Str("errorType", TypeOf(err)).
+			Err(err).Msg("couldn't upload cosign manifest")
 
 		return err
 	}
@@ -213,7 +227,8 @@ func syncNotarySignature(client *resty.Client, imageStore storage.ImageStore,
 		resp, err := client.R().
 			Get(getRefManifestURL.String())
 		if err != nil {
-			log.Error().Err(err).Msgf("couldn't get notary manifest: %s", getRefManifestURL.String())
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msgf("couldn't get notary manifest: %s", getRefManifestURL.String())
 
 			return err
 		}
@@ -223,7 +238,8 @@ func syncNotarySignature(client *resty.Client, imageStore storage.ImageStore,
 
 		err = json.Unmarshal(resp.Body(), &artifactManifest)
 		if err != nil {
-			log.Error().Err(err).Msgf("couldn't unmarshal notary manifest: %s", getRefManifestURL.String())
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msgf("couldn't unmarshal notary manifest: %s", getRefManifestURL.String())
 
 			return err
 		}
@@ -235,7 +251,8 @@ func syncNotarySignature(client *resty.Client, imageStore storage.ImageStore,
 
 			resp, err := client.R().SetDoNotParseResponse(true).Get(getBlobURL.String())
 			if err != nil {
-				log.Error().Err(err).Msgf("couldn't get notary blob: %s", getBlobURL.String())
+				log.Error().Str("errorType", TypeOf(err)).
+					Err(err).Msgf("couldn't get notary blob: %s", getBlobURL.String())
 
 				return err
 			}
@@ -251,7 +268,8 @@ func syncNotarySignature(client *resty.Client, imageStore storage.ImageStore,
 
 			_, _, err = imageStore.FullBlobUpload(localRepo, resp.RawBody(), blob.Digest.String())
 			if err != nil {
-				log.Error().Err(err).Msg("couldn't upload notary sig blob")
+				log.Error().Str("errorType", TypeOf(err)).
+					Err(err).Msg("couldn't upload notary sig blob")
 
 				return err
 			}
@@ -260,7 +278,8 @@ func syncNotarySignature(client *resty.Client, imageStore storage.ImageStore,
 		_, err = imageStore.PutImageManifest(localRepo, ref.Digest.String(),
 			artifactspec.MediaTypeArtifactManifest, resp.Body())
 		if err != nil {
-			log.Error().Err(err).Msg("couldn't upload notary sig manifest")
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msg("couldn't upload notary sig manifest")
 
 			return err
 		}
@@ -282,7 +301,8 @@ func canSkipNotarySignature(repo, tag, digest string, refs ReferenceList, imageS
 				return false, nil
 			}
 
-			log.Error().Err(err).Msgf("couldn't get local notary signature %s:%s manifest", repo, tag)
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msgf("couldn't get local notary signature %s:%s manifest", repo, tag)
 
 			return false, err
 		}
@@ -316,14 +336,16 @@ func canSkipCosignSignature(repo, tag, digest string, cosignManifest *ispec.Mani
 				return false, nil
 			}
 
-			log.Error().Err(err).Msgf("couldn't get local cosign %s:%s manifest", repo, tag)
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msgf("couldn't get local cosign %s:%s manifest", repo, tag)
 
 			return false, err
 		}
 
 		err = json.Unmarshal(localCosignManifestBuf, &localCosignManifest)
 		if err != nil {
-			log.Error().Err(err).Msgf("couldn't unmarshal local cosign signature %s:%s manifest", repo, tag)
+			log.Error().Str("errorType", TypeOf(err)).
+				Err(err).Msgf("couldn't unmarshal local cosign signature %s:%s manifest", repo, tag)
 
 			return false, err
 		}

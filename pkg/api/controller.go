@@ -20,6 +20,7 @@ import (
 	"zotregistry.io/zot/errors"
 	"zotregistry.io/zot/pkg/api/config"
 	ext "zotregistry.io/zot/pkg/extensions"
+	extconf "zotregistry.io/zot/pkg/extensions/config"
 	"zotregistry.io/zot/pkg/extensions/monitoring"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/storage"
@@ -102,13 +103,6 @@ func DumpRuntimeParams(log log.Logger) {
 }
 
 func (c *Controller) Run(reloadCtx context.Context) error {
-	// validate configuration
-	if err := c.Config.Validate(c.Log); err != nil {
-		c.Log.Error().Err(err).Msg("configuration validation failed")
-
-		return err
-	}
-
 	// print the current configuration, but strip secrets
 	c.Log.Info().Interface("params", c.Config.Sanitize()).Msg("configuration settings")
 
@@ -225,7 +219,8 @@ func (c *Controller) InitImageStore(reloadCtx context.Context) error {
 	c.StoreController = storage.StoreController{}
 
 	if c.Config.Storage.RootDirectory != "" {
-		if c.Config.Storage.Dedupe {
+		// no need to validate hard links work on s3
+		if c.Config.Storage.Dedupe && c.Config.Storage.StorageDriver == nil {
 			err := storage.ValidateHardLink(c.Config.Storage.RootDirectory)
 			if err != nil {
 				c.Log.Warn().Msg("input storage root directory filesystem does not supports hardlinking," +
@@ -236,7 +231,7 @@ func (c *Controller) InitImageStore(reloadCtx context.Context) error {
 		}
 
 		var defaultStore storage.ImageStore
-		if len(c.Config.Storage.StorageDriver) == 0 {
+		if c.Config.Storage.StorageDriver == nil {
 			defaultStore = storage.NewImageStore(c.Config.Storage.RootDirectory,
 				c.Config.Storage.GC, c.Config.Storage.GCDelay, c.Config.Storage.Dedupe, c.Config.Storage.Commit, c.Log, c.Metrics)
 		} else {
@@ -253,7 +248,14 @@ func (c *Controller) InitImageStore(reloadCtx context.Context) error {
 				return err
 			}
 
-			defaultStore = s3.NewImageStore(c.Config.Storage.RootDirectory,
+			/* in the case of s3 c.Config.Storage.RootDirectory is used for caching blobs locally and
+			c.Config.Storage.StorageDriver["rootdirectory"] is the actual rootDir in s3 */
+			rootDir := "/"
+			if c.Config.Storage.StorageDriver["rootdirectory"] != nil {
+				rootDir = fmt.Sprintf("%v", c.Config.Storage.StorageDriver["rootdirectory"])
+			}
+
+			defaultStore = s3.NewImageStore(rootDir, c.Config.Storage.RootDirectory,
 				c.Config.Storage.GC, c.Config.Storage.GCDelay, c.Config.Storage.Dedupe,
 				c.Config.Storage.Commit, c.Log, c.Metrics, store)
 		}
@@ -274,7 +276,8 @@ func (c *Controller) InitImageStore(reloadCtx context.Context) error {
 
 			// creating image store per subpaths
 			for route, storageConfig := range subPaths {
-				if storageConfig.Dedupe {
+				// no need to validate hard links work on s3
+				if storageConfig.Dedupe && storageConfig.StorageDriver == nil {
 					err := storage.ValidateHardLink(storageConfig.RootDirectory)
 					if err != nil {
 						c.Log.Warn().Msg("input storage root directory filesystem does not supports hardlinking, " +
@@ -284,7 +287,7 @@ func (c *Controller) InitImageStore(reloadCtx context.Context) error {
 					}
 				}
 
-				if len(storageConfig.StorageDriver) == 0 {
+				if storageConfig.StorageDriver == nil {
 					subImageStore[route] = storage.NewImageStore(storageConfig.RootDirectory,
 						storageConfig.GC, storageConfig.GCDelay, storageConfig.Dedupe, storageConfig.Commit, c.Log, c.Metrics)
 				} else {
@@ -301,7 +304,14 @@ func (c *Controller) InitImageStore(reloadCtx context.Context) error {
 						return err
 					}
 
-					subImageStore[route] = s3.NewImageStore(storageConfig.RootDirectory,
+					/* in the case of s3 c.Config.Storage.RootDirectory is used for caching blobs locally and
+					c.Config.Storage.StorageDriver["rootdirectory"] is the actual rootDir in s3 */
+					rootDir := "/"
+					if c.Config.Storage.StorageDriver["rootdirectory"] != nil {
+						rootDir = fmt.Sprintf("%v", c.Config.Storage.StorageDriver["rootdirectory"])
+					}
+
+					subImageStore[route] = s3.NewImageStore(rootDir, storageConfig.RootDirectory,
 						storageConfig.GC, storageConfig.GCDelay, storageConfig.Dedupe, storageConfig.Commit, c.Log, c.Metrics, store)
 				}
 			}
@@ -341,38 +351,155 @@ func (c *Controller) Shutdown() {
 }
 
 func (c *Controller) StartBackgroundTasks(reloadCtx context.Context) {
-	// Enable running garbage-collect periodically for DefaultStore
-	if c.Config.Storage.GC && c.Config.Storage.GCInterval != 0 {
-		c.StoreController.DefaultStore.RunGCPeriodically(c.Config.Storage.GCInterval)
-	}
-
 	// Enable extensions if extension config is provided for DefaultStore
 	if c.Config != nil && c.Config.Extensions != nil {
-		ext.EnableExtensions(c.Config, c.Log, c.Config.Storage.RootDirectory)
+		ext.EnableMetricsExtension(c.Config, c.Log, c.Config.Storage.RootDirectory)
+		ext.EnableSearchExtension(c.Config, c.Log, c.Config.Storage.RootDirectory)
 	}
 
 	if c.Config.Storage.SubPaths != nil {
-		for route, storageConfig := range c.Config.Storage.SubPaths {
-			// Enable running garbage-collect periodically for subImageStore
-			if storageConfig.GC && storageConfig.GCInterval != 0 {
-				c.StoreController.SubStore[route].RunGCPeriodically(storageConfig.GCInterval)
-			}
-
+		for _, storageConfig := range c.Config.Storage.SubPaths {
 			// Enable extensions if extension config is provided for subImageStore
 			if c.Config != nil && c.Config.Extensions != nil {
-				ext.EnableExtensions(c.Config, c.Log, storageConfig.RootDirectory)
+				ext.EnableMetricsExtension(c.Config, c.Log, storageConfig.RootDirectory)
+				ext.EnableSearchExtension(c.Config, c.Log, storageConfig.RootDirectory)
 			}
 		}
 	}
 
 	// Enable extensions if extension config is provided for storeController
 	if c.Config.Extensions != nil {
-		if c.Config.Extensions.Sync != nil && *c.Config.Extensions.Sync.Enable {
+		if c.Config.Extensions.Sync != nil {
 			ext.EnableSyncExtension(reloadCtx, c.Config, c.wgShutDown, c.StoreController, c.Log)
 		}
 	}
 
 	if c.Config.Extensions != nil {
-		ext.EnableScrubExtension(c.Config, c.StoreController, c.Log)
+		ext.EnableScrubExtension(c.Config, c.Log, false, nil, "")
 	}
+
+	go StartPeriodicTasks(c.StoreController.DefaultStore, c.StoreController.SubStore, c.Config.Storage.SubPaths,
+		c.Config.Storage.GC, c.Config.Storage.GCInterval, c.Config.Extensions, c.Log)
+}
+
+func StartPeriodicTasks(defaultStore storage.ImageStore, subStore map[string]storage.ImageStore,
+	subPaths map[string]config.StorageConfig, gcEnabled bool, gcInterval time.Duration,
+	extensions *extconf.ExtensionConfig, log log.Logger,
+) {
+	// start periodic gc and/or scrub for DefaultStore
+	StartPeriodicTasksForImageStore(defaultStore, gcEnabled, gcInterval, extensions, log)
+
+	for route, storageConfig := range subPaths {
+		// Enable running garbage-collect or/and scrub periodically for subImageStore
+		StartPeriodicTasksForImageStore(subStore[route], storageConfig.GC, storageConfig.GCInterval, extensions, log)
+	}
+}
+
+func StartPeriodicTasksForImageStore(imageStore storage.ImageStore, configGC bool, configGCInterval time.Duration,
+	extensions *extconf.ExtensionConfig, log log.Logger,
+) {
+	scrubInterval := time.Duration(0)
+	gcInterval := time.Duration(0)
+
+	gc := false
+	scrub := false
+
+	if configGC && configGCInterval != 0 {
+		gcInterval = configGCInterval
+		gc = true
+	}
+
+	if extensions != nil && extensions.Scrub != nil && extensions.Scrub.Interval != 0 {
+		scrubInterval = extensions.Scrub.Interval
+		scrub = true
+	}
+
+	interval := minPeriodicInterval(scrub, gc, scrubInterval, gcInterval)
+	if interval == time.Duration(0) {
+		return
+	}
+
+	log.Info().Msg(fmt.Sprintf("Periodic interval for %s set to %s", imageStore.RootDir(), interval))
+
+	var lastGC, lastScrub time.Time
+
+	for {
+		log.Info().Msg(fmt.Sprintf("Starting periodic background tasks for %s", imageStore.RootDir()))
+
+		// Enable running garbage-collect or/and scrub periodically for imageStore
+		RunBackgroundTasks(imageStore, gc, scrub, log)
+
+		log.Info().Msg(fmt.Sprintf("Finishing periodic background tasks for %s", imageStore.RootDir()))
+
+		if gc {
+			lastGC = time.Now()
+		}
+
+		if scrub {
+			lastScrub = time.Now()
+		}
+
+		time.Sleep(interval)
+
+		if !lastGC.IsZero() && time.Since(lastGC) >= gcInterval {
+			gc = true
+		}
+
+		if !lastScrub.IsZero() && time.Since(lastScrub) >= scrubInterval {
+			scrub = true
+		}
+	}
+}
+
+func RunBackgroundTasks(imgStore storage.ImageStore, gc, scrub bool, log log.Logger) {
+	repos, err := imgStore.GetRepositories()
+	if err != nil {
+		log.Error().Err(err).Msg(fmt.Sprintf("error while running background task for %s", imgStore.RootDir()))
+
+		return
+	}
+
+	for _, repo := range repos {
+		if gc {
+			start := time.Now()
+
+			// run gc for this repo
+			imgStore.RunGCRepo(repo)
+
+			elapsed := time.Since(start)
+			log.Info().Msg(fmt.Sprintf("gc for %s executed in %s", repo, elapsed))
+			time.Sleep(1 * time.Minute)
+		}
+
+		if scrub {
+			start := time.Now()
+
+			// run scrub for this repo
+			ext.EnableScrubExtension(nil, log, true, imgStore, repo)
+
+			elapsed := time.Since(start)
+			log.Info().Msg(fmt.Sprintf("scrub for %s executed in %s", repo, elapsed))
+			time.Sleep(1 * time.Minute)
+		}
+	}
+}
+
+func minPeriodicInterval(scrub, gc bool, scrubInterval, gcInterval time.Duration) time.Duration {
+	if scrub && gc {
+		if scrubInterval <= gcInterval {
+			return scrubInterval
+		}
+
+		return gcInterval
+	}
+
+	if scrub {
+		return scrubInterval
+	}
+
+	if gc {
+		return gcInterval
+	}
+
+	return time.Duration(0)
 }

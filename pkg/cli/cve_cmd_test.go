@@ -1,5 +1,5 @@
-//go:build extended
-// +build extended
+//go:build ui_base
+// +build ui_base
 
 package cli //nolint:testpackage
 
@@ -19,6 +19,7 @@ import (
 	zotErrors "zotregistry.io/zot/errors"
 	"zotregistry.io/zot/pkg/api"
 	"zotregistry.io/zot/pkg/api/config"
+	"zotregistry.io/zot/pkg/api/constants"
 	extconf "zotregistry.io/zot/pkg/extensions/config"
 	"zotregistry.io/zot/pkg/test"
 )
@@ -320,7 +321,7 @@ func TestServerCVEResponse(t *testing.T) {
 	}(ctlr)
 	// wait till ready
 	for {
-		res, err := resty.R().Get(url + "/query")
+		res, err := resty.R().Get(url + constants.ExtSearchPrefix)
 		if err == nil && res.StatusCode() == 200 {
 			break
 		}

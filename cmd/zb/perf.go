@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/big"
 	mrand "math/rand"
+	"net"
 	"net/http"
 	urlparser "net/url"
 	"os"
@@ -20,6 +22,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	godigest "github.com/opencontainers/go-digest"
 	"gopkg.in/resty.v1"
+	"zotregistry.io/zot/pkg/api/constants"
 )
 
 const (
@@ -35,13 +38,17 @@ const (
 	largeBlob            = 100 * MiB
 	cicdFmt              = "ci-cd"
 	secureProtocol       = "https"
+	httpKeepAlive        = 30 * time.Second
+	maxSourceIPs         = 1000
+	httpTimeout          = 30 * time.Second
+	TLSHandshakeTimeout  = 10 * time.Second
 )
 
-// nolint:gochecknoglobals // used only in this test
+// nolint:gochecknoglobals
 var blobHash map[string]godigest.Digest = map[string]godigest.Digest{}
 
 // nolint:gochecknoglobals // used only in this test
-var statusRequests map[string]int
+var statusRequests sync.Map
 
 func setup(workingDir string) {
 	_ = os.MkdirAll(workingDir, defaultDirPerms)
@@ -208,15 +215,25 @@ func printStats(requests int, summary *statsSummary, outFmt string) {
 	log.Printf("\n")
 
 	if summary.mixedSize {
-		log.Printf("1MB:\t%v", statusRequests["1MB"])
-		log.Printf("10MB:\t%v", statusRequests["10MB"])
-		log.Printf("100MB:\t%v", statusRequests["100MB"])
+		current := loadOrStore(&statusRequests, "1MB", 0)
+		log.Printf("1MB:\t%v", current)
+
+		current = loadOrStore(&statusRequests, "10MB", 0)
+		log.Printf("10MB:\t%v", current)
+
+		current = loadOrStore(&statusRequests, "100MB", 0)
+		log.Printf("100MB:\t%v", current)
+
 		log.Printf("\n")
 	}
 
 	if summary.mixedType {
-		log.Printf("Pull:\t%v", statusRequests["Pull"])
-		log.Printf("Push:\t%v", statusRequests["Push"])
+		pull := loadOrStore(&statusRequests, "Pull", 0)
+		log.Printf("Pull:\t%v", pull)
+
+		push := loadOrStore(&statusRequests, "Push", 0)
+		log.Printf("Push:\t%v", push)
+
 		log.Printf("\n")
 	}
 
@@ -282,26 +299,21 @@ func normalizeProbabilityRange(pbty []float64) []float64 {
 
 // test suites/funcs.
 
-type testFunc func(workdir, url, auth, repo string, requests int, config testConfig, statsCh chan statsRecord) error
+type testFunc func(
+	workdir, url, repo string,
+	requests int,
+	config testConfig,
+	statsCh chan statsRecord,
+	client *resty.Client,
+) error
 
-func GetCatalog(workdir, url, auth, repo string, requests int, config testConfig, statsCh chan statsRecord) error {
-	client := resty.New()
-
-	if auth != "" {
-		creds := strings.Split(auth, ":")
-		client.SetBasicAuth(creds[0], creds[1])
-	}
-
-	parsedURL, err := urlparser.Parse(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// nolint: gosec
-	if parsedURL.Scheme == secureProtocol {
-		client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	}
-
+func GetCatalog(
+	workdir, url, repo string,
+	requests int,
+	config testConfig,
+	statsCh chan statsRecord,
+	client *resty.Client,
+) error {
 	for count := 0; count < requests; count++ {
 		func() {
 			start := time.Now()
@@ -323,7 +335,7 @@ func GetCatalog(workdir, url, auth, repo string, requests int, config testConfig
 			}()
 
 			// send request and get response
-			resp, err := client.R().Get(url + "/v2/_catalog")
+			resp, err := client.R().Get(url + constants.RoutePrefix + constants.ExtCatalogPrefix)
 
 			latency = time.Since(start)
 
@@ -346,30 +358,17 @@ func GetCatalog(workdir, url, auth, repo string, requests int, config testConfig
 	return nil
 }
 
-func PushMonolithStreamed(workdir, url, auth, trepo string, requests int,
-	config testConfig, statsCh chan statsRecord,
+func PushMonolithStreamed(
+	workdir, url, trepo string,
+	requests int,
+	config testConfig,
+	statsCh chan statsRecord,
+	client *resty.Client,
 ) error {
-	client := resty.New()
-
-	if auth != "" {
-		creds := strings.Split(auth, ":")
-		client.SetBasicAuth(creds[0], creds[1])
-	}
-
-	parsedURL, err := urlparser.Parse(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// nolint: gosec
-	if parsedURL.Scheme == secureProtocol {
-		client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	}
-
 	var repos []string
 
 	if config.mixedSize {
-		statusRequests = make(map[string]int)
+		statusRequests = sync.Map{}
 	}
 
 	for count := 0; count < requests; count++ {
@@ -378,7 +377,7 @@ func PushMonolithStreamed(workdir, url, auth, trepo string, requests int,
 	}
 
 	// clean up
-	err = deleteTestRepo(repos, url, client)
+	err := deleteTestRepo(repos, url, client)
 	if err != nil {
 		return err
 	}
@@ -386,30 +385,17 @@ func PushMonolithStreamed(workdir, url, auth, trepo string, requests int,
 	return nil
 }
 
-func PushChunkStreamed(workdir, url, auth, trepo string, requests int,
-	config testConfig, statsCh chan statsRecord,
+func PushChunkStreamed(
+	workdir, url, trepo string,
+	requests int,
+	config testConfig,
+	statsCh chan statsRecord,
+	client *resty.Client,
 ) error {
-	client := resty.New()
-
-	if auth != "" {
-		creds := strings.Split(auth, ":")
-		client.SetBasicAuth(creds[0], creds[1])
-	}
-
-	parsedURL, err := urlparser.Parse(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// nolint: gosec
-	if parsedURL.Scheme == secureProtocol {
-		client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	}
-
 	var repos []string
 
 	if config.mixedSize {
-		statusRequests = make(map[string]int)
+		statusRequests = sync.Map{}
 	}
 
 	for count := 0; count < requests; count++ {
@@ -418,7 +404,7 @@ func PushChunkStreamed(workdir, url, auth, trepo string, requests int,
 	}
 
 	// clean up
-	err = deleteTestRepo(repos, url, client)
+	err := deleteTestRepo(repos, url, client)
 	if err != nil {
 		return err
 	}
@@ -426,26 +412,13 @@ func PushChunkStreamed(workdir, url, auth, trepo string, requests int,
 	return nil
 }
 
-func Pull(workdir, url, auth, trepo string, requests int,
-	config testConfig, statsCh chan statsRecord,
+func Pull(
+	workdir, url, trepo string,
+	requests int,
+	config testConfig,
+	statsCh chan statsRecord,
+	client *resty.Client,
 ) error {
-	client := resty.New()
-
-	if auth != "" {
-		creds := strings.Split(auth, ":")
-		client.SetBasicAuth(creds[0], creds[1])
-	}
-
-	parsedURL, err := urlparser.Parse(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// nolint: gosec
-	if parsedURL.Scheme == secureProtocol {
-		client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	}
-
 	var repos []string
 
 	var manifestHash map[string]string
@@ -453,7 +426,7 @@ func Pull(workdir, url, auth, trepo string, requests int,
 	manifestBySizeHash := make(map[int](map[string]string))
 
 	if config.mixedSize {
-		statusRequests = make(map[string]int)
+		statusRequests = sync.Map{}
 	}
 
 	if config.mixedSize {
@@ -464,7 +437,7 @@ func Pull(workdir, url, auth, trepo string, requests int,
 		largeSizeIdx := 2
 
 		// Push small blob
-		manifestBySize, repos, err = pushMonolithImage(workdir, url, trepo, repos, smallBlob, client)
+		manifestBySize, repos, err := pushMonolithImage(workdir, url, trepo, repos, smallBlob, client)
 		if err != nil {
 			return err
 		}
@@ -480,6 +453,7 @@ func Pull(workdir, url, auth, trepo string, requests int,
 		manifestBySizeHash[mediumSizeIdx] = manifestBySize
 
 		// Push large blob
+		// nolint: ineffassign, staticcheck, wastedassign
 		manifestBySize, repos, err = pushMonolithImage(workdir, url, trepo, repos, largeBlob, client)
 		if err != nil {
 			return err
@@ -488,6 +462,7 @@ func Pull(workdir, url, auth, trepo string, requests int,
 		manifestBySizeHash[largeSizeIdx] = manifestBySize
 	} else {
 		// Push blob given size
+		var err error
 		manifestHash, repos, err = pushMonolithImage(workdir, url, trepo, repos, config.size, client)
 		if err != nil {
 			return err
@@ -505,7 +480,7 @@ func Pull(workdir, url, auth, trepo string, requests int,
 	}
 
 	// clean up
-	err = deleteTestRepo(repos, url, client)
+	err := deleteTestRepo(repos, url, client)
 	if err != nil {
 		return err
 	}
@@ -513,29 +488,16 @@ func Pull(workdir, url, auth, trepo string, requests int,
 	return nil
 }
 
-func MixedPullAndPush(workdir, url, auth, trepo string, requests int,
-	config testConfig, statsCh chan statsRecord,
+func MixedPullAndPush(
+	workdir, url, trepo string,
+	requests int,
+	config testConfig,
+	statsCh chan statsRecord,
+	client *resty.Client,
 ) error {
-	client := resty.New()
-
-	if auth != "" {
-		creds := strings.Split(auth, ":")
-		client.SetBasicAuth(creds[0], creds[1])
-	}
-
-	parsedURL, err := urlparser.Parse(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// nolint: gosec
-	if parsedURL.Scheme == secureProtocol {
-		client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
-	}
-
 	var repos []string
 
-	statusRequests = make(map[string]int)
+	statusRequests = sync.Map{}
 
 	// Push blob given size
 	manifestHash, repos, err := pushMonolithImage(workdir, url, trepo, repos, config.size, client)
@@ -555,10 +517,12 @@ func MixedPullAndPush(workdir, url, auth, trepo string, requests int,
 
 		if idx == readTestIdx {
 			repos = pullAndCollect(url, repos, manifestItem, config, client, statsCh)
-			statusRequests["Pull"]++
+			current := loadOrStore(&statusRequests, "Pull", 0)
+			statusRequests.Store("Pull", current+1)
 		} else if idx == writeTestIdx {
 			repos = pushMonolithAndCollect(workdir, url, trepo, count, repos, config, client, statsCh)
-			statusRequests["Push"]++
+			current := loadOrStore(&statusRequests, "Push", 0)
+			statusRequests.Store("Pull", current+1)
 		}
 	}
 
@@ -673,7 +637,11 @@ var testSuite = []testConfig{ // nolint:gochecknoglobals // used only in this te
 	},
 }
 
-func Perf(workdir, url, auth, repo string, concurrency int, requests int, outFmt string) {
+func Perf(
+	workdir, url, auth, repo string,
+	concurrency int, requests int,
+	outFmt string, srcIPs string, srcCIDR string,
+) {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	// logging
 	log.SetFlags(0)
@@ -693,6 +661,19 @@ func Perf(workdir, url, auth, repo string, concurrency int, requests int, outFmt
 
 	zbError := false
 
+	var err error
+
+	// get host ips from command line to make requests from
+	var ips []string
+	if len(srcIPs) > 0 {
+		ips = strings.Split(srcIPs, ",")
+	} else if len(srcCIDR) > 0 {
+		ips, err = getIPsFromCIDR(srcCIDR, maxSourceIPs)
+		if err != nil {
+			log.Fatal(err) //nolint: gocritic
+		}
+	}
+
 	for _, tconfig := range testSuite {
 		statsCh := make(chan statsRecord, requests)
 
@@ -709,7 +690,12 @@ func Perf(workdir, url, auth, repo string, concurrency int, requests int, outFmt
 			go func() {
 				defer wg.Done()
 
-				_ = tconfig.tfunc(workdir, url, auth, repo, requests/concurrency, tconfig, statsCh)
+				httpClient, err := getRandomClientIPs(auth, url, ips)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				_ = tconfig.tfunc(workdir, url, repo, requests/concurrency, tconfig, statsCh, httpClient)
 			}()
 		}
 		wg.Wait()
@@ -742,7 +728,7 @@ func Perf(workdir, url, auth, repo string, concurrency int, requests int, outFmt
 	if outFmt == cicdFmt {
 		jsonOut, err := json.Marshal(cicdSummary)
 		if err != nil {
-			log.Fatal(err) // nolint:gocritic // file closed on exit
+			log.Fatal(err) // file closed on exit
 		}
 
 		if err := ioutil.WriteFile(fmt.Sprintf("%s.json", outFmt), jsonOut, defaultFilePerms); err != nil {
@@ -752,5 +738,83 @@ func Perf(workdir, url, auth, repo string, concurrency int, requests int, outFmt
 
 	if zbError {
 		os.Exit(1)
+	}
+}
+
+// getRandomClientIPs returns a resty client with a random bind address from ips slice.
+func getRandomClientIPs(auth string, url string, ips []string) (*resty.Client, error) {
+	client := resty.New()
+
+	if auth != "" {
+		creds := strings.Split(auth, ":")
+		client.SetBasicAuth(creds[0], creds[1])
+	}
+
+	// get random ip client
+	if len(ips) != 0 {
+		// get random number
+		nBig, err := crand.Int(crand.Reader, big.NewInt(int64(len(ips))))
+		if err != nil {
+			return nil, err
+		}
+
+		// get random ip
+		ip := ips[nBig.Int64()]
+
+		// set ip in transport
+		localAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:0", ip))
+		if err != nil {
+			return nil, err
+		}
+
+		transport := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   httpTimeout,
+				KeepAlive: httpKeepAlive,
+				LocalAddr: localAddr,
+			}).DialContext,
+			TLSHandshakeTimeout: TLSHandshakeTimeout,
+		}
+
+		client.SetTransport(transport)
+	}
+
+	parsedURL, err := urlparser.Parse(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// nolint: gosec
+	if parsedURL.Scheme == secureProtocol {
+		client.SetTLSClientConfig(&tls.Config{InsecureSkipVerify: true})
+	}
+
+	return client, nil
+}
+
+// getIPsFromCIDR returns a list of ips given a cidr.
+func getIPsFromCIDR(cidr string, maxIPs int) ([]string, error) {
+	// nolint:varnamelen
+	ip, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+
+	var ips []string
+	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip) && len(ips) < maxIPs; inc(ip) {
+		ips = append(ips, ip.String())
+	}
+	// remove network address and broadcast address
+	return ips[1 : len(ips)-1], nil
+}
+
+// https://go.dev/play/p/sdzcMvZYWnc
+func inc(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
 	}
 }

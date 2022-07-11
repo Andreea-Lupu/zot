@@ -1,5 +1,5 @@
-//go:build extended
-// +build extended
+//go:build ui_base || search
+// +build ui_base search
 
 package cli
 
@@ -18,6 +18,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"gopkg.in/yaml.v2"
 	zotErrors "zotregistry.io/zot/errors"
+	"zotregistry.io/zot/pkg/api/constants"
 )
 
 type SearchService interface {
@@ -34,6 +35,8 @@ type SearchService interface {
 	getImageByNameAndCVEID(ctx context.Context, config searchConfig, username, password, imageName, cvid string,
 		channel chan stringResult, wtgrp *sync.WaitGroup)
 	getFixedTagsForCVE(ctx context.Context, config searchConfig, username, password, imageName, cvid string,
+		channel chan stringResult, wtgrp *sync.WaitGroup)
+	getRepos(ctx context.Context, config searchConfig, username, password string,
 		channel chan stringResult, wtgrp *sync.WaitGroup)
 }
 
@@ -70,7 +73,8 @@ func (service searchService) getAllImages(ctx context.Context, config searchConf
 
 	catalog := &catalogResponse{}
 
-	catalogEndPoint, err := combineServerAndEndpointURL(*config.servURL, "/v2/_catalog")
+	catalogEndPoint, err := combineServerAndEndpointURL(*config.servURL, fmt.Sprintf("%s%s",
+		constants.RoutePrefix, constants.ExtCatalogPrefix))
 	if err != nil {
 		if isContextDone(ctx) {
 			return
@@ -365,12 +369,20 @@ func (service searchService) getCveByImage(ctx context.Context, config searchCon
 }
 
 func groupCVEsBySeverity(cveList []cve) []cve {
-	high := make([]cve, 0)
-	med := make([]cve, 0)
-	low := make([]cve, 0)
+	var (
+		unknown  = make([]cve, 0)
+		none     = make([]cve, 0)
+		high     = make([]cve, 0)
+		med      = make([]cve, 0)
+		low      = make([]cve, 0)
+		critical = make([]cve, 0)
+	)
 
 	for _, cve := range cveList {
 		switch cve.Severity {
+		case "NONE":
+			none = append(none, cve)
+
 		case "LOW":
 			low = append(low, cve)
 
@@ -379,10 +391,25 @@ func groupCVEsBySeverity(cveList []cve) []cve {
 
 		case "HIGH":
 			high = append(high, cve)
+
+		case "CRITICAL":
+			critical = append(critical, cve)
+
+		default:
+			unknown = append(unknown, cve)
 		}
 	}
+	vulnsCount := len(unknown) + len(none) + len(high) + len(med) + len(low) + len(critical)
+	vulns := make([]cve, 0, vulnsCount)
 
-	return append(append(high, med...), low...)
+	vulns = append(vulns, critical...)
+	vulns = append(vulns, high...)
+	vulns = append(vulns, med...)
+	vulns = append(vulns, low...)
+	vulns = append(vulns, none...)
+	vulns = append(vulns, unknown...)
+
+	return vulns
 }
 
 func isContextDone(ctx context.Context) bool {
@@ -453,7 +480,7 @@ func (service searchService) makeGraphQLQuery(ctx context.Context, config search
 	username, password, query string,
 	resultPtr interface{},
 ) error {
-	endPoint, err := combineServerAndEndpointURL(*config.servURL, "/query")
+	endPoint, err := combineServerAndEndpointURL(*config.servURL, constants.ExtSearchPrefix)
 	if err != nil {
 		return err
 	}
@@ -814,6 +841,42 @@ func getCVETableWriter(writer io.Writer) *tablewriter.Table {
 	table.SetColMinWidth(colCVETitleIndex, cveTitleWidth)
 
 	return table
+}
+
+func (service searchService) getRepos(ctx context.Context, config searchConfig, username, password string,
+	rch chan stringResult, wtgrp *sync.WaitGroup,
+) {
+	defer wtgrp.Done()
+	defer close(rch)
+
+	catalog := &catalogResponse{}
+
+	catalogEndPoint, err := combineServerAndEndpointURL(*config.servURL, fmt.Sprintf("%s%s",
+		constants.RoutePrefix, constants.ExtCatalogPrefix))
+	if err != nil {
+		if isContextDone(ctx) {
+			return
+		}
+		rch <- stringResult{"", err}
+
+		return
+	}
+
+	_, err = makeGETRequest(ctx, catalogEndPoint, username, password, *config.verifyTLS, catalog)
+	if err != nil {
+		if isContextDone(ctx) {
+			return
+		}
+		rch <- stringResult{"", err}
+
+		return
+	}
+
+	fmt.Fprintln(config.resultWriter, "\n\nREPOSITORY NAME")
+
+	for _, repo := range catalog.Repositories {
+		fmt.Fprintln(config.resultWriter, repo)
+	}
 }
 
 const (
