@@ -60,6 +60,9 @@ type RepoDB interface { //nolint:interfacebloat
 	// DeleteSignature delets signature metadata to a given manifest from the database
 	DeleteSignature(repo string, signedManifestDigest godigest.Digest, sm SignatureMetadata) error
 
+	// VerifyManifestSignatures checks signatures validity of a given manifest
+	VerifyManifestSignatures(repo string, manifestDigest godigest.Digest) error
+
 	// SearchRepos searches for repos given a search string
 	SearchRepos(ctx context.Context, searchText string, filter Filter, requestedPage PageInput) (
 		[]RepoMetadata, map[string]ManifestMetadata, PageInfo, error)
@@ -93,7 +96,7 @@ type ManifestMetadata struct {
 	ManifestBlob  []byte
 	ConfigBlob    []byte
 	DownloadCount int
-	Signatures    map[string][]string
+	Signatures    ManifestSignatures
 }
 
 type ManifestData struct {
@@ -111,18 +114,33 @@ type DescriptorStatistics struct {
 	DownloadCount int
 }
 
+type ManifestSignatures map[string][]SignatureInfo
+
 type RepoMetadata struct {
 	Name string
 	Tags map[string]Descriptor
 
 	Statistics map[string]DescriptorStatistics
-	Signatures map[string]map[string][]string
+	Signatures map[string]ManifestSignatures
 	Stars      int
+}
+
+type LayerInfo struct {
+	LayerDigest  string
+	LayerContent []byte
+	SignatureKey string
+	Signer       string
+}
+
+type SignatureInfo struct {
+	SignatureManifestDigest string
+	LayersInfo              []LayerInfo
 }
 
 type SignatureMetadata struct {
 	SignatureType   string
-	SignatureDigest godigest.Digest
+	SignatureDigest string
+	LayersInfo      []LayerInfo
 }
 
 type SortCriteria string

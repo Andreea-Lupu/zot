@@ -785,7 +785,7 @@ func TestCVEStruct(t *testing.T) {
 			ManifestBlob:  manifestBlob11,
 			ConfigBlob:    configBlob11,
 			DownloadCount: 0,
-			Signatures:    map[string][]string{},
+			Signatures:    repodb.ManifestSignatures{},
 		}
 
 		digest11 := godigest.FromBytes(manifestBlob11)
@@ -821,7 +821,7 @@ func TestCVEStruct(t *testing.T) {
 			ManifestBlob:  manifestBlob12,
 			ConfigBlob:    configBlob12,
 			DownloadCount: 0,
-			Signatures:    map[string][]string{},
+			Signatures:    repodb.ManifestSignatures{},
 		}
 
 		digest12 := godigest.FromBytes(manifestBlob12)

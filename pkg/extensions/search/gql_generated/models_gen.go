@@ -7,6 +7,8 @@ import (
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/99designs/gqlgen/graphql"
 )
 
 // Contains various details about the CVE and a list of PackageInfo about the affected packages
@@ -58,6 +60,7 @@ type ImageSummary struct {
 	ConfigDigest    *string                    `json:"ConfigDigest"`
 	LastUpdated     *time.Time                 `json:"LastUpdated"`
 	IsSigned        *bool                      `json:"IsSigned"`
+	SignatureInfo   []*SignatureSummary        `json:"SignatureInfo"`
 	Size            *string                    `json:"Size"`
 	Platform        *OsArch                    `json:"Platform"`
 	Vendor          *string                    `json:"Vendor"`
@@ -127,6 +130,12 @@ type PaginatedReposResult struct {
 	Results []*RepoSummary `json:"Results"`
 }
 
+type PublicKey struct {
+	File           graphql.Upload `json:"File"`
+	Repo           string         `json:"Repo"`
+	SignedManifest string         `json:"SignedManifest"`
+}
+
 // Contains details about the repo: a list of image summaries and a summary of the repo
 type RepoInfo struct {
 	Images  []*ImageSummary `json:"Images"`
@@ -146,6 +155,16 @@ type RepoSummary struct {
 	StarCount     *int          `json:"StarCount"`
 	IsBookmarked  *bool         `json:"IsBookmarked"`
 	IsStarred     *bool         `json:"IsStarred"`
+}
+
+// Contains details about the signature
+type SignatureSummary struct {
+	IsValid *bool   `json:"IsValid"`
+	Author  *string `json:"Author"`
+}
+
+type UploadResult struct {
+	Success bool `json:"Success"`
 }
 
 type SortCriteria string

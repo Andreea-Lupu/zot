@@ -61,20 +61,32 @@ func SyncRepo(repo string, repoDB RepoDB, storeController storage.StoreControlle
 		return err
 	}
 
+	type layerInfo struct {
+		layerDigest  string
+		content      []byte
+		signatureKey string
+	}
+
 	type foundSignatureData struct {
 		repo                 string
 		tag                  string
 		signatureType        string
 		signedManifestDigest string
 		signatureDigest      string
+		layers               []layerInfo
 	}
 
 	var signaturesFound []foundSignatureData
 
+	const notationMediaType = "application/vnd.cncf.oras.artifact.manifest.v1+json"
+
 	for _, manifest := range indexContent.Manifests {
 		tag, hasTag := manifest.Annotations[ispec.AnnotationRefName]
+		mediaType := manifest.MediaType
 
-		if !hasTag {
+		// notation signature manifest doesn't contain "annotations" field, but has a special mediaType
+		// to avoid skipping notation signature sync we should check "mediaType" field
+		if !hasTag && mediaType != notationMediaType {
 			log.Warn().Msgf("sync-repo: image without tag found, will not be synced into RepoDB")
 
 			continue
@@ -118,6 +130,42 @@ func SyncRepo(repo string, repoDB RepoDB, storeController storage.StoreControlle
 		}
 
 		if isSignature {
+			layers := []layerInfo{}
+
+			if signatureType == CosignType {
+				var manifestContent ispec.Manifest
+				if err := json.Unmarshal(manifestBlob, &manifestContent); err != nil {
+					log.Error().Err(err).Msgf("sync-repo: unable to marshal blob index for %s:%s manifest digest %s ",
+						repo, tag, manifest.Digest.String())
+
+					return err
+				}
+
+				for _, layer := range manifestContent.Layers {
+					layerContent, err := imageStore.GetBlobContent(repo, layer.Digest)
+					if err != nil {
+						log.Error().Err(err).Msgf("sync-repo: unable to get cosign signature layer content for %s:%s manifest digest %s",
+							repo, tag, manifest.Digest.String())
+
+						return err
+					}
+
+					layerSigKey, ok := layer.Annotations[SigKey]
+					if !ok {
+						log.Error().Err(err).Msgf("sync-repo: unable to get cosign signature for %s:%s manifest digest %s",
+							repo, tag, manifest.Digest.String())
+					}
+
+					layers = append(layers, layerInfo{
+						layerDigest:  layer.Digest.String(),
+						content:      layerContent,
+						signatureKey: layerSigKey,
+					})
+				}
+			} else if signatureType == NotationType {
+				layers = append(layers, layerInfo{})
+			}
+
 			// We'll ignore signatures now because the order in which the signed image and signature are added into
 			// the DB matters. First we add the normal images then the signatures
 			signaturesFound = append(signaturesFound, foundSignatureData{
@@ -126,6 +174,7 @@ func SyncRepo(repo string, repoDB RepoDB, storeController storage.StoreControlle
 				signatureType:        signatureType,
 				signedManifestDigest: signedManifestDigest.String(),
 				signatureDigest:      digest.String(),
+				layers:               layers,
 			})
 
 			continue
@@ -143,7 +192,7 @@ func SyncRepo(repo string, repoDB RepoDB, storeController storage.StoreControlle
 			ManifestBlob:  manifestData.ManifestBlob,
 			ConfigBlob:    manifestData.ConfigBlob,
 			DownloadCount: 0,
-			Signatures:    map[string][]string{},
+			Signatures:    ManifestSignatures{},
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("sync-repo: failed to set manifest meta for image %s:%s manifest digest %s ",
@@ -163,15 +212,32 @@ func SyncRepo(repo string, repoDB RepoDB, storeController storage.StoreControlle
 
 	// manage the signatures found
 	for _, sigData := range signaturesFound {
+		layersInfo := []LayerInfo{}
+
+		for _, layer := range sigData.layers {
+			layersInfo = append(layersInfo, LayerInfo{
+				LayerDigest:  layer.layerDigest,
+				LayerContent: layer.content,
+				SignatureKey: layer.signatureKey,
+			})
+		}
+
 		err := repoDB.AddManifestSignature(repo, godigest.Digest(sigData.signedManifestDigest), SignatureMetadata{
 			SignatureType:   sigData.signatureType,
-			SignatureDigest: godigest.Digest(sigData.signatureDigest),
+			SignatureDigest: sigData.signatureDigest,
+			LayersInfo:      layersInfo,
 		})
 		if err != nil {
 			log.Error().Err(err).Msgf("sync-repo: failed set signature meta for signed image %s:%s manifest digest %s ",
 				sigData.repo, sigData.tag, sigData.signedManifestDigest)
 
 			return err
+		}
+
+		err = repoDB.VerifyManifestSignatures(sigData.repo, godigest.Digest(sigData.signedManifestDigest))
+		if err != nil {
+			log.Error().Err(err).Msgf("sync-repo: failed verify signatures validity for signed image %s:%s manifest digest %s ",
+				sigData.repo, sigData.tag, sigData.signedManifestDigest)
 		}
 	}
 

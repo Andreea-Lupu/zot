@@ -42,6 +42,8 @@ type RepoDBMock struct {
 
 	DeleteSignatureFn func(repo string, signedManifestDigest godigest.Digest, sm repodb.SignatureMetadata) error
 
+	VerifyManifestSignaturesFn func(repo string, manifestDigest godigest.Digest) error
+
 	SearchReposFn func(ctx context.Context, searchText string, filter repodb.Filter, requestedPage repodb.PageInput) (
 		[]repodb.RepoMetadata, map[string]repodb.ManifestMetadata, repodb.PageInfo, error)
 
@@ -194,6 +196,14 @@ func (sdm RepoDBMock) DeleteSignature(repo string, signedManifestDigest godigest
 ) error {
 	if sdm.DeleteSignatureFn != nil {
 		return sdm.DeleteSignatureFn(repo, signedManifestDigest, sm)
+	}
+
+	return nil
+}
+
+func (sdm RepoDBMock) VerifyManifestSignatures(repo string, manifestDigest godigest.Digest) error {
+	if sdm.VerifyManifestSignaturesFn != nil {
+		return sdm.VerifyManifestSignaturesFn(repo, manifestDigest)
 	}
 
 	return nil

@@ -121,7 +121,7 @@ func TestSyncRepoDBWithStorage(t *testing.T) {
 
 			if descriptor.Digest == signedManifestDigest.String() {
 				So(repos[0].Signatures[descriptor.Digest], ShouldNotBeEmpty)
-				So(manifestMeta.Signatures["cosign"], ShouldNotBeEmpty)
+				So(manifestMeta.Signatures[repodb.CosignType], ShouldNotBeEmpty)
 			}
 		}
 	})

@@ -5,10 +5,71 @@ package search
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"path"
+
+	godigest "github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 
 	"zotregistry.io/zot/pkg/extensions/search/common"
 	"zotregistry.io/zot/pkg/extensions/search/gql_generated"
+	"zotregistry.io/zot/pkg/meta/repodb"
 )
+
+// UploadPublicKey is the resolver for the UploadPublicKey field.
+func (r *mutationResolver) UploadPublicKey(ctx context.Context, input gql_generated.PublicKey) (*gql_generated.UploadResult, error) {
+	if input.File.Filename == "" {
+		return &gql_generated.UploadResult{Success: false}, errors.New("invalid name of file")
+	}
+
+	stream, err := io.ReadAll(input.File.File)
+	if err != nil {
+		return &gql_generated.UploadResult{Success: false}, err
+	}
+
+	const (
+		dirPerms  = 0o700
+		filePerms = 0o600
+	)
+
+	if _, err = os.Stat(repodb.SignaturesDirPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(repodb.SignaturesDirPath, dirPerms); err != nil {
+			r.log.Error().Err(err).Msg("unable to create signatures dir")
+
+			return &gql_generated.UploadResult{Success: false}, err
+		}
+	}
+
+	dirPath := path.Join(repodb.SignaturesDirPath, fmt.Sprintf("%s@%s", input.Repo, input.SignedManifest))
+
+	if _, err = os.Stat(dirPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(dirPath, dirPerms); err != nil {
+			r.log.Error().Err(err).Msgf("unable to create signatures dir for manifest %s", input.SignedManifest)
+
+			return &gql_generated.UploadResult{Success: false}, err
+		}
+	}
+
+	fileName := godigest.FromBytes(stream).String()
+	filePath := path.Join(dirPath, fileName)
+
+	fileErr := os.WriteFile(filePath, stream, filePerms)
+
+	if fileErr != nil {
+		return &gql_generated.UploadResult{Success: false}, fileErr
+	}
+
+	err = r.repoDB.VerifyManifestSignatures(input.Repo, godigest.Digest(input.SignedManifest))
+	if err != nil {
+		r.log.Error().Err(err).Msg("unable to verify manifest signatures")
+
+		return &gql_generated.UploadResult{Success: false}, err
+	}
+
+	return &gql_generated.UploadResult{Success: true}, nil
+}
 
 // CVEListForImage is the resolver for the CVEListForImage field.
 func (r *queryResolver) CVEListForImage(ctx context.Context, image string) (*gql_generated.CVEResultForImage, error) {
@@ -107,7 +168,13 @@ func (r *queryResolver) Image(ctx context.Context, image string) (*gql_generated
 	return getImageSummary(ctx, repo, tag, r.repoDB, r.cveInfo, r.log)
 }
 
+// Mutation returns gql_generated.MutationResolver implementation.
+func (r *Resolver) Mutation() gql_generated.MutationResolver { return &mutationResolver{r} }
+
 // Query returns gql_generated.QueryResolver implementation.
 func (r *Resolver) Query() gql_generated.QueryResolver { return &queryResolver{r} }
 
-type queryResolver struct{ *Resolver }
+type (
+	mutationResolver struct{ *Resolver }
+	queryResolver    struct{ *Resolver }
+)

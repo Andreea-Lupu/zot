@@ -1,7 +1,10 @@
 package update
 
 import (
+	"encoding/json"
+
 	godigest "github.com/opencontainers/go-digest"
+	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 
 	zerr "zotregistry.io/zot/errors"
@@ -42,9 +45,41 @@ func OnUpdateManifest(name, reference, mediaType string, digest godigest.Digest,
 	metadataSuccessfullySet := true
 
 	if isSignature {
+		layersInfo := []repodb.LayerInfo{}
+
+		if signatureType == repodb.CosignType {
+			var manifestContent ispec.Manifest
+			if err := json.Unmarshal(body, &manifestContent); err != nil {
+				log.Error().Err(err).Msgf("unable to marshal blob index for %s:%s manifest digest %s ",
+					name, reference, digest.String())
+
+				return err
+			}
+
+			for _, layer := range manifestContent.Layers {
+				layerContent, err := imgStore.GetBlobContent(name, layer.Digest)
+				if err != nil {
+					log.Error().Err(err).Msgf("unable to get cosign signature layer content for %s:%s manifest digest %s",
+						name, reference, digest.String())
+
+					return err
+				}
+
+				layerSigKey := layer.Annotations[repodb.SigKey]
+
+				layersInfo = append(layersInfo, repodb.LayerInfo{
+					LayerDigest:  layer.Digest.String(),
+					LayerContent: layerContent, SignatureKey: layerSigKey,
+				})
+			}
+		} else if signatureType == repodb.NotationType {
+			layersInfo = append(layersInfo, repodb.LayerInfo{})
+		}
+
 		err = repoDB.AddManifestSignature(name, signedManifestDigest, repodb.SignatureMetadata{
 			SignatureType:   signatureType,
-			SignatureDigest: digest,
+			SignatureDigest: digest.String(),
+			LayersInfo:      layersInfo,
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("repodb: error while putting repo meta")
@@ -99,7 +134,7 @@ func OnDeleteManifest(name, reference, mediaType string, digest godigest.Digest,
 
 	if isSignature {
 		err = repoDB.DeleteSignature(name, signedManifestDigest, repodb.SignatureMetadata{
-			SignatureDigest: digest,
+			SignatureDigest: digest.String(),
 			SignatureType:   signatureType,
 		})
 		if err != nil {
@@ -176,7 +211,7 @@ func setMetadataFromInput(repo, reference, mediaType string, digest godigest.Dig
 		ManifestBlob:  imageMetadata.ManifestBlob,
 		ConfigBlob:    imageMetadata.ConfigBlob,
 		DownloadCount: 0,
-		Signatures:    map[string][]string{},
+		Signatures:    repodb.ManifestSignatures{},
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("repodb: error while putting image meta")
@@ -184,7 +219,7 @@ func setMetadataFromInput(repo, reference, mediaType string, digest godigest.Dig
 		return err
 	}
 
-	if refferenceIsDigest(reference) {
+	if referenceIsDigest(reference) {
 		return nil
 	}
 
@@ -198,7 +233,7 @@ func setMetadataFromInput(repo, reference, mediaType string, digest godigest.Dig
 	return nil
 }
 
-func refferenceIsDigest(reference string) bool {
+func referenceIsDigest(reference string) bool {
 	_, err := godigest.Parse(reference)
 
 	return err == nil

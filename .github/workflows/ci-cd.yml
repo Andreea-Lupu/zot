@@ -1,10 +1,10 @@
 on:
   push:
     branches:
-      - main
+      - gql-cosign-sig-validity
   pull_request:
     branches:
-      - main
+      - gql-cosign-sig-validity
   release:
     types:
       - published

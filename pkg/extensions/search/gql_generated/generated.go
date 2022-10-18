@@ -36,6 +36,7 @@ type Config struct {
 }
 
 type ResolverRoot interface {
+	Mutation() MutationResolver
 	Query() QueryResolver
 }
 
@@ -88,6 +89,7 @@ type ComplexityRoot struct {
 		Platform        func(childComplexity int) int
 		RepoName        func(childComplexity int) int
 		Score           func(childComplexity int) int
+		SignatureInfo   func(childComplexity int) int
 		Size            func(childComplexity int) int
 		Source          func(childComplexity int) int
 		Tag             func(childComplexity int) int
@@ -110,6 +112,10 @@ type ComplexityRoot struct {
 		Digest func(childComplexity int) int
 		Score  func(childComplexity int) int
 		Size   func(childComplexity int) int
+	}
+
+	Mutation struct {
+		UploadPublicKey func(childComplexity int, input PublicKey) int
 	}
 
 	OsArch struct {
@@ -170,8 +176,20 @@ type ComplexityRoot struct {
 		StarCount     func(childComplexity int) int
 		Vendors       func(childComplexity int) int
 	}
+
+	SignatureSummary struct {
+		Author  func(childComplexity int) int
+		IsValid func(childComplexity int) int
+	}
+
+	UploadResult struct {
+		Success func(childComplexity int) int
+	}
 }
 
+type MutationResolver interface {
+	UploadPublicKey(ctx context.Context, input PublicKey) (*UploadResult, error)
+}
 type QueryResolver interface {
 	CVEListForImage(ctx context.Context, image string) (*CVEResultForImage, error)
 	ImageListForCve(ctx context.Context, id string, requestedPage *PageInput) ([]*ImageSummary, error)
@@ -425,6 +443,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ImageSummary.Score(childComplexity), true
 
+	case "ImageSummary.SignatureInfo":
+		if e.complexity.ImageSummary.SignatureInfo == nil {
+			break
+		}
+
+		return e.complexity.ImageSummary.SignatureInfo(childComplexity), true
+
 	case "ImageSummary.Size":
 		if e.complexity.ImageSummary.Size == nil {
 			break
@@ -515,6 +540,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.LayerSummary.Size(childComplexity), true
+
+	case "Mutation.UploadPublicKey":
+		if e.complexity.Mutation.UploadPublicKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_UploadPublicKey_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UploadPublicKey(childComplexity, args["input"].(PublicKey)), true
 
 	case "OsArch.Arch":
 		if e.complexity.OsArch.Arch == nil {
@@ -816,6 +853,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.RepoSummary.Vendors(childComplexity), true
 
+	case "SignatureSummary.Author":
+		if e.complexity.SignatureSummary.Author == nil {
+			break
+		}
+
+		return e.complexity.SignatureSummary.Author(childComplexity), true
+
+	case "SignatureSummary.IsValid":
+		if e.complexity.SignatureSummary.IsValid == nil {
+			break
+		}
+
+		return e.complexity.SignatureSummary.IsValid(childComplexity), true
+
+	case "UploadResult.Success":
+		if e.complexity.UploadResult.Success == nil {
+			break
+		}
+
+		return e.complexity.UploadResult.Success(childComplexity), true
+
 	}
 	return 0, false
 }
@@ -826,6 +884,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputFilter,
 		ec.unmarshalInputPageInput,
+		ec.unmarshalInputPublicKey,
 	)
 	first := true
 
@@ -838,6 +897,21 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			first = false
 			ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
 			data := ec._Query(ctx, rc.Operation.SelectionSet)
+			var buf bytes.Buffer
+			data.MarshalGQL(&buf)
+
+			return &graphql.Response{
+				Data: buf.Bytes(),
+			}
+		}
+	case ast.Mutation:
+		return func(ctx context.Context) *graphql.Response {
+			if !first {
+				return nil
+			}
+			first = false
+			ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
+			data := ec._Mutation(ctx, rc.Operation.SelectionSet)
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
 
@@ -872,6 +946,7 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 
 var sources = []*ast.Source{
 	{Name: "../schema.graphql", Input: `scalar Time
+scalar Upload
 
 """
 Contains the tag of the image and a list of CVEs
@@ -933,6 +1008,7 @@ type ImageSummary {
     ConfigDigest: String
     LastUpdated: Time
     IsSigned: Boolean
+    SignatureInfo: [SignatureSummary]
     Size: String
     Platform: OsArch
     Vendor: String
@@ -1016,6 +1092,14 @@ Contains details about the supported OS and architecture of the image
 type OsArch {
     Os: String
     Arch: String
+}
+
+"""
+Contains details about the signature
+"""
+type SignatureSummary {
+    IsValid: Boolean
+    Author:  String
 }
 
 enum SortCriteria {
@@ -1115,6 +1199,23 @@ type Query {
     """
     Image(image: String!): ImageSummary
 }
+
+type UploadResult {
+    Success: Boolean!
+}
+
+input PublicKey {
+    File: Upload!
+    Repo: String!
+    SignedManifest: String!
+}
+
+type Mutation {
+    """
+    Upload the public key generated by cosign in order to verify image signature
+    """
+    UploadPublicKey(input: PublicKey!): UploadResult!
+}
 `, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -1122,6 +1223,21 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_UploadPublicKey_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 PublicKey
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalNPublicKey2zotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐPublicKey(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
 
 func (ec *executionContext) field_Query_BaseImageList_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -1824,6 +1940,8 @@ func (ec *executionContext) fieldContext_GlobalSearchResult_Images(ctx context.C
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -2423,6 +2541,53 @@ func (ec *executionContext) fieldContext_ImageSummary_IsSigned(ctx context.Conte
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ImageSummary_SignatureInfo(ctx context.Context, field graphql.CollectedField, obj *ImageSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SignatureInfo, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*SignatureSummary)
+	fc.Result = res
+	return ec.marshalOSignatureSummary2ᚕᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐSignatureSummary(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ImageSummary_SignatureInfo(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ImageSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "IsValid":
+				return ec.fieldContext_SignatureSummary_IsValid(ctx, field)
+			case "Author":
+				return ec.fieldContext_SignatureSummary_Author(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SignatureSummary", field.Name)
 		},
 	}
 	return fc, nil
@@ -3417,6 +3582,65 @@ func (ec *executionContext) fieldContext_LayerSummary_Score(ctx context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_UploadPublicKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_UploadPublicKey(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UploadPublicKey(rctx, fc.Args["input"].(PublicKey))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*UploadResult)
+	fc.Result = res
+	return ec.marshalNUploadResult2ᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐUploadResult(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_UploadPublicKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "Success":
+				return ec.fieldContext_UploadResult_Success(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UploadResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_UploadPublicKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OsArch_Os(ctx context.Context, field graphql.CollectedField, obj *OsArch) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_OsArch_Os(ctx, field)
 	if err != nil {
@@ -3808,6 +4032,8 @@ func (ec *executionContext) fieldContext_PaginatedImagesResult_Results(ctx conte
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -4071,6 +4297,8 @@ func (ec *executionContext) fieldContext_Query_ImageListForCVE(ctx context.Conte
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -4169,6 +4397,8 @@ func (ec *executionContext) fieldContext_Query_ImageListWithCVEFixed(ctx context
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -4267,6 +4497,8 @@ func (ec *executionContext) fieldContext_Query_ImageListForDigest(ctx context.Co
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -4426,6 +4658,8 @@ func (ec *executionContext) fieldContext_Query_ImageList(ctx context.Context, fi
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -4772,6 +5006,8 @@ func (ec *executionContext) fieldContext_Query_Image(ctx context.Context, field 
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -4999,6 +5235,8 @@ func (ec *executionContext) fieldContext_RepoInfo_Images(ctx context.Context, fi
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -5403,6 +5641,8 @@ func (ec *executionContext) fieldContext_RepoSummary_NewestImage(ctx context.Con
 				return ec.fieldContext_ImageSummary_LastUpdated(ctx, field)
 			case "IsSigned":
 				return ec.fieldContext_ImageSummary_IsSigned(ctx, field)
+			case "SignatureInfo":
+				return ec.fieldContext_ImageSummary_SignatureInfo(ctx, field)
 			case "Size":
 				return ec.fieldContext_ImageSummary_Size(ctx, field)
 			case "Platform":
@@ -5596,6 +5836,132 @@ func (ec *executionContext) _RepoSummary_IsStarred(ctx context.Context, field gr
 func (ec *executionContext) fieldContext_RepoSummary_IsStarred(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RepoSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SignatureSummary_IsValid(ctx context.Context, field graphql.CollectedField, obj *SignatureSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SignatureSummary_IsValid(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsValid, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SignatureSummary_IsValid(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SignatureSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SignatureSummary_Author(ctx context.Context, field graphql.CollectedField, obj *SignatureSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SignatureSummary_Author(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Author, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SignatureSummary_Author(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SignatureSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UploadResult_Success(ctx context.Context, field graphql.CollectedField, obj *UploadResult) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UploadResult_Success(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Success, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UploadResult_Success(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UploadResult",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -7467,6 +7833,50 @@ func (ec *executionContext) unmarshalInputPageInput(ctx context.Context, obj int
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputPublicKey(ctx context.Context, obj interface{}) (PublicKey, error) {
+	var it PublicKey
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"File", "Repo", "SignedManifest"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "File":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("File"))
+			it.File, err = ec.unmarshalNUpload2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚐUpload(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "Repo":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("Repo"))
+			it.Repo, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "SignedManifest":
+			var err error
+
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("SignedManifest"))
+			it.SignedManifest, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -7657,6 +8067,10 @@ func (ec *executionContext) _ImageSummary(ctx context.Context, sel ast.Selection
 
 			out.Values[i] = ec._ImageSummary_IsSigned(ctx, field, obj)
 
+		case "SignatureInfo":
+
+			out.Values[i] = ec._ImageSummary_SignatureInfo(ctx, field, obj)
+
 		case "Size":
 
 			out.Values[i] = ec._ImageSummary_Size(ctx, field, obj)
@@ -7812,6 +8226,45 @@ func (ec *executionContext) _LayerSummary(ctx context.Context, sel ast.Selection
 
 			out.Values[i] = ec._LayerSummary_Score(ctx, field, obj)
 
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var mutationImplementors = []string{"Mutation"}
+
+func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, mutationImplementors)
+	ctx = graphql.WithFieldContext(ctx, &graphql.FieldContext{
+		Object: "Mutation",
+	})
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		innerCtx := graphql.WithRootFieldContext(ctx, &graphql.RootFieldContext{
+			Object: field.Name,
+			Field:  field,
+		})
+
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Mutation")
+		case "UploadPublicKey":
+
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_UploadPublicKey(ctx, field)
+			})
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -8358,6 +8811,63 @@ func (ec *executionContext) _RepoSummary(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var signatureSummaryImplementors = []string{"SignatureSummary"}
+
+func (ec *executionContext) _SignatureSummary(ctx context.Context, sel ast.SelectionSet, obj *SignatureSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, signatureSummaryImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SignatureSummary")
+		case "IsValid":
+
+			out.Values[i] = ec._SignatureSummary_IsValid(ctx, field, obj)
+
+		case "Author":
+
+			out.Values[i] = ec._SignatureSummary_Author(ctx, field, obj)
+
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var uploadResultImplementors = []string{"UploadResult"}
+
+func (ec *executionContext) _UploadResult(ctx context.Context, sel ast.SelectionSet, obj *UploadResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, uploadResultImplementors)
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UploadResult")
+		case "Success":
+
+			out.Values[i] = ec._UploadResult_Success(ctx, field, obj)
+
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var __DirectiveImplementors = []string{"__Directive"}
 
 func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionSet, obj *introspection.Directive) graphql.Marshaler {
@@ -8816,6 +9326,11 @@ func (ec *executionContext) marshalNPaginatedReposResult2ᚖzotregistryᚗioᚋz
 	return ec._PaginatedReposResult(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNPublicKey2zotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐPublicKey(ctx context.Context, v interface{}) (PublicKey, error) {
+	res, err := ec.unmarshalInputPublicKey(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNRepoInfo2zotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐRepoInfo(ctx context.Context, sel ast.SelectionSet, v RepoInfo) graphql.Marshaler {
 	return ec._RepoInfo(ctx, sel, &v)
 }
@@ -8897,6 +9412,35 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNUpload2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚐUpload(ctx context.Context, v interface{}) (graphql.Upload, error) {
+	res, err := graphql.UnmarshalUpload(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNUpload2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚐUpload(ctx context.Context, sel ast.SelectionSet, v graphql.Upload) graphql.Marshaler {
+	res := graphql.MarshalUpload(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) marshalNUploadResult2zotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐUploadResult(ctx context.Context, sel ast.SelectionSet, v UploadResult) graphql.Marshaler {
+	return ec._UploadResult(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUploadResult2ᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐUploadResult(ctx context.Context, sel ast.SelectionSet, v *UploadResult) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UploadResult(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
@@ -9612,6 +10156,54 @@ func (ec *executionContext) marshalORepoSummary2ᚖzotregistryᚗioᚋzotᚋpkg�
 		return graphql.Null
 	}
 	return ec._RepoSummary(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOSignatureSummary2ᚕᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐSignatureSummary(ctx context.Context, sel ast.SelectionSet, v []*SignatureSummary) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalOSignatureSummary2ᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐSignatureSummary(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	return ret
+}
+
+func (ec *executionContext) marshalOSignatureSummary2ᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐSignatureSummary(ctx context.Context, sel ast.SelectionSet, v *SignatureSummary) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._SignatureSummary(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOSortCriteria2ᚖzotregistryᚗioᚋzotᚋpkgᚋextensionsᚋsearchᚋgql_generatedᚐSortCriteria(ctx context.Context, v interface{}) (*SortCriteria, error) {

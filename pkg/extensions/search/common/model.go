@@ -26,6 +26,7 @@ type ImageSummary struct {
 	ConfigDigest    string                    `json:"configDigest"`
 	LastUpdated     time.Time                 `json:"lastUpdated"`
 	IsSigned        bool                      `json:"isSigned"`
+	SignatureInfo   []SignatureSummary        `json:"signatureInfo"`
 	Size            string                    `json:"size"`
 	Platform        OsArch                    `json:"platform"`
 	Vendor          string                    `json:"vendor"`
@@ -42,6 +43,10 @@ type ImageSummary struct {
 	Vulnerabilities ImageVulnerabilitySummary `json:"vulnerabilities"`
 	Authors         string                    `json:"authors"`
 	Logo            string                    `json:"logo"`
+}
+
+type SignatureSummary struct {
+	IsValid *bool `json:"isValid"`
 }
 
 type OsArch struct {

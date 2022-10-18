@@ -1027,7 +1027,7 @@ func TestImageList(t *testing.T) {
 							ManifestBlob:  manifestBlob,
 							ConfigBlob:    configBlob,
 							DownloadCount: 0,
-							Signatures:    make(map[string][]string),
+							Signatures:    repodb.ManifestSignatures{},
 						},
 					}
 
@@ -2044,19 +2044,19 @@ func TestDerivedImageList(t *testing.T) {
 				ManifestBlob:  manifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 			"digestTag1.0.2": {
 				ManifestBlob:  derivedManifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 			"digestTag1.0.3": {
 				ManifestBlob:  derivedManifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 		}
 		manifestDigest := godigest.FromBytes(manifestBlob)
@@ -2310,13 +2310,13 @@ func TestBaseImageList(t *testing.T) {
 				ManifestBlob:  manifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 			"digestTag1.0.2": {
 				ManifestBlob:  derivedManifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 		}
 		derivedManifestDigest := godigest.FromBytes(derivedManifestBlob)
@@ -2484,13 +2484,13 @@ func TestBaseImageList(t *testing.T) {
 				ManifestBlob:  manifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 			"digestTag1.0.2": {
 				ManifestBlob:  derivedManifestBlob,
 				ConfigBlob:    configBlob,
 				DownloadCount: 100,
-				Signatures:    make(map[string][]string),
+				Signatures:    repodb.ManifestSignatures{},
 			},
 		}
 		derivedManifestDigest := godigest.FromBytes(derivedManifestBlob)

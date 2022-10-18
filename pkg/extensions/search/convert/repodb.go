@@ -102,6 +102,29 @@ func RepoMeta2RepoSummary(ctx context.Context, repoMeta repodb.RepoMetadata,
 		}
 
 		imageCveSummary := cveinfo.ImageCVESummary{}
+		signaturesInfo := []*gql_generated.SignatureSummary{}
+
+		if isSigned {
+			for _, signatures := range imageSignatures {
+				for _, sig := range signatures {
+					for _, layer := range sig.LayersInfo {
+						var isValid bool
+
+						var author string
+
+						if layer.Signer != "" {
+							isValid = true
+							author = layer.Signer
+						} else {
+							isValid = false
+							author = ""
+						}
+
+						signaturesInfo = append(signaturesInfo, &gql_generated.SignatureSummary{IsValid: &isValid, Author: &author})
+					}
+				}
+			}
+		}
 
 		imageSummary := gql_generated.ImageSummary{
 			RepoName:      &repoName,
@@ -110,6 +133,7 @@ func RepoMeta2RepoSummary(ctx context.Context, repoMeta repodb.RepoMetadata,
 			ConfigDigest:  &configDigest,
 			LastUpdated:   &imageLastUpdated,
 			IsSigned:      &isSigned,
+			SignatureInfo: signaturesInfo,
 			Size:          &imageSize,
 			Platform:      &osArch,
 			Vendor:        &annotations.Vendor,
@@ -286,6 +310,30 @@ func RepoMeta2ImageSummaries(ctx context.Context, repoMeta repodb.RepoMetadata,
 				"manifest digest: %s, error: %s", tag, repoMeta.Name, manifestDigest, err.Error()))
 		}
 
+		signaturesInfo := []*gql_generated.SignatureSummary{}
+
+		if isSigned {
+			for _, signatures := range imageSignatures {
+				for _, sig := range signatures {
+					for _, layer := range sig.LayersInfo {
+						var isValid bool
+
+						var author string
+
+						if layer.Signer != "" {
+							isValid = true
+							author = layer.Signer
+						} else {
+							isValid = false
+							author = ""
+						}
+
+						signaturesInfo = append(signaturesInfo, &gql_generated.SignatureSummary{IsValid: &isValid, Author: &author})
+					}
+				}
+			}
+		}
+
 		imageSummary := gql_generated.ImageSummary{
 			RepoName:      &repoName,
 			Tag:           &tag,
@@ -293,6 +341,7 @@ func RepoMeta2ImageSummaries(ctx context.Context, repoMeta repodb.RepoMetadata,
 			ConfigDigest:  &configDigest,
 			LastUpdated:   &imageLastUpdated,
 			IsSigned:      &isSigned,
+			SignatureInfo: signaturesInfo,
 			Size:          &imageSize,
 			Platform:      &osArch,
 			Vendor:        &annotations.Vendor,
@@ -395,6 +444,29 @@ func RepoMeta2ExpandedRepoInfo(ctx context.Context, repoMeta repodb.RepoMetadata
 		}
 
 		imageCveSummary := cveinfo.ImageCVESummary{}
+		signaturesInfo := []*gql_generated.SignatureSummary{}
+
+		if isSigned {
+			for _, signatures := range imageSignatures {
+				for _, sig := range signatures {
+					for _, layer := range sig.LayersInfo {
+						var isValid bool
+
+						var author string
+
+						if layer.Signer != "" {
+							isValid = true
+							author = layer.Signer
+						} else {
+							isValid = false
+							author = ""
+						}
+
+						signaturesInfo = append(signaturesInfo, &gql_generated.SignatureSummary{IsValid: &isValid, Author: &author})
+					}
+				}
+			}
+		}
 
 		imageSummary := gql_generated.ImageSummary{
 			RepoName:      &repoName,
@@ -403,6 +475,7 @@ func RepoMeta2ExpandedRepoInfo(ctx context.Context, repoMeta repodb.RepoMetadata
 			ConfigDigest:  &configDigest,
 			LastUpdated:   &imageLastUpdated,
 			IsSigned:      &isSigned,
+			SignatureInfo: signaturesInfo,
 			Size:          &imageSize,
 			Platform:      &osArch,
 			Vendor:        &annotations.Vendor,

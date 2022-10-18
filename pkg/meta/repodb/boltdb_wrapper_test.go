@@ -444,14 +444,15 @@ func TestBoltDBWrapper(t *testing.T) {
 			So(err, ShouldBeNil)
 
 			err = repoDB.AddManifestSignature(repo1, manifestDigest1, repodb.SignatureMetadata{
-				SignatureType:   "cosign",
+				SignatureType:   repodb.CosignType,
 				SignatureDigest: "digest",
 			})
 			So(err, ShouldBeNil)
 
 			repoMeta, err := repoDB.GetRepoMeta(repo1)
 			So(err, ShouldBeNil)
-			So(repoMeta.Signatures[manifestDigest1.String()]["cosign"], ShouldContain, "digest")
+			So(repoMeta.Signatures[manifestDigest1.String()][repodb.CosignType], ShouldContain,
+				repodb.SignatureInfo{SignatureManifestDigest: "digest"})
 
 			_, err = repoDB.GetManifestMeta(repo1, "badDigest")
 			So(err, ShouldNotBeNil)
@@ -471,27 +472,28 @@ func TestBoltDBWrapper(t *testing.T) {
 			So(err, ShouldBeNil)
 
 			err = repoDB.AddManifestSignature(repo1, manifestDigest1, repodb.SignatureMetadata{
-				SignatureType:   "cosign",
+				SignatureType:   repodb.CosignType,
 				SignatureDigest: "digest",
 			})
 			So(err, ShouldBeNil)
 
 			repoMeta, err := repoDB.GetRepoMeta(repo1)
 			So(err, ShouldBeNil)
-			So(repoMeta.Signatures[manifestDigest1.String()]["cosign"], ShouldContain, "digest")
+			So(repoMeta.Signatures[manifestDigest1.String()][repodb.CosignType], ShouldContain,
+				repodb.SignatureInfo{SignatureManifestDigest: "digest"})
 
 			err = repoDB.DeleteSignature(repo1, manifestDigest1, repodb.SignatureMetadata{
-				SignatureType:   "cosign",
+				SignatureType:   repodb.CosignType,
 				SignatureDigest: "digest",
 			})
 			So(err, ShouldBeNil)
 
 			repoMeta, err = repoDB.GetRepoMeta(repo1)
 			So(err, ShouldBeNil)
-			So(repoMeta.Signatures[manifestDigest1.String()]["cosign"], ShouldBeEmpty)
+			So(repoMeta.Signatures[manifestDigest1.String()][repodb.CosignType], ShouldBeEmpty)
 
 			err = repoDB.DeleteSignature(repo1, "badDigest", repodb.SignatureMetadata{
-				SignatureType:   "cosign",
+				SignatureType:   repodb.CosignType,
 				SignatureDigest: "digest",
 			})
 			So(err, ShouldNotBeNil)

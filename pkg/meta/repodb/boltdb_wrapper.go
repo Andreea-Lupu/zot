@@ -1,8 +1,13 @@
 package repodb
 
 import (
+	"bytes"
 	"context"
+	"crypto"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -13,11 +18,21 @@ import (
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/sigstore/cosign/pkg/cosign/pkcs11key"
+	sigs "github.com/sigstore/cosign/pkg/signature"
+	"github.com/sigstore/sigstore/pkg/signature/options"
 	bolt "go.etcd.io/bbolt"
 
 	zerr "zotregistry.io/zot/errors"
 	"zotregistry.io/zot/pkg/log"
 	localCtx "zotregistry.io/zot/pkg/requestcontext"
+)
+
+const (
+	SignaturesDirPath = "/tmp/zot/signatures"
+	SigKey            = "dev.cosignproject.cosign/signature"
+	NotationType      = "notation"
+	CosignType        = "cosign"
 )
 
 type BoltDBParameters struct {
@@ -113,7 +128,7 @@ func (bdw BoltDBWrapper) SetManifestMeta(repo string, manifestDigest godigest.Di
 			Name:       repo,
 			Tags:       map[string]Descriptor{},
 			Statistics: map[string]DescriptorStatistics{},
-			Signatures: map[string]map[string][]string{},
+			Signatures: map[string]ManifestSignatures{},
 		}
 
 		repoMetaBlob := repoBuck.Get([]byte(repo))
@@ -159,7 +174,7 @@ func updateManifestMeta(repoMeta RepoMetadata, manifestDigest godigest.Digest, m
 	updatedRepoMeta.Statistics[manifestDigest.String()] = updatedStatistics
 
 	if manifestMeta.Signatures == nil {
-		manifestMeta.Signatures = map[string][]string{}
+		manifestMeta.Signatures = ManifestSignatures{}
 	}
 
 	updatedRepoMeta.Signatures[manifestDigest.String()] = manifestMeta.Signatures
@@ -201,7 +216,7 @@ func (bdw BoltDBWrapper) GetManifestMeta(repo string, manifestDigest godigest.Di
 		manifestMetadata.ConfigBlob = manifestData.ConfigBlob
 		manifestMetadata.DownloadCount = repoMeta.Statistics[manifestDigest.String()].DownloadCount
 
-		manifestMetadata.Signatures = map[string][]string{}
+		manifestMetadata.Signatures = ManifestSignatures{}
 
 		if repoMeta.Signatures[manifestDigest.String()] != nil {
 			manifestMetadata.Signatures = repoMeta.Signatures[manifestDigest.String()]
@@ -239,7 +254,7 @@ func (bdw BoltDBWrapper) SetRepoTag(repo string, tag string, manifestDigest godi
 				Statistics: map[string]DescriptorStatistics{
 					manifestDigest.String(): {DownloadCount: 0},
 				},
-				Signatures: map[string]map[string][]string{
+				Signatures: map[string]ManifestSignatures{
 					manifestDigest.String(): {},
 				},
 			}
@@ -535,6 +550,156 @@ func referenceIsDigest(reference string) bool {
 	return err == nil
 }
 
+func (bdw BoltDBWrapper) verifyCosignSignatures(repo string, digest godigest.Digest) error {
+	err := bdw.db.Update(func(tx *bolt.Tx) error {
+		buck := tx.Bucket([]byte(RepoMetadataBucket))
+
+		repoMetaBlob := buck.Get([]byte(repo))
+		if repoMetaBlob == nil {
+			return zerr.ErrRepoMetaNotFound
+		}
+
+		var repoMeta RepoMetadata
+
+		err := json.Unmarshal(repoMetaBlob, &repoMeta)
+		if err != nil {
+			return err
+		}
+
+		signatureInfo := []SignatureInfo{}
+
+		layerSigPath := path.Join(SignaturesDirPath, fmt.Sprintf("%s@%s", repo, digest.String()))
+
+		files, err := os.ReadDir(layerSigPath)
+		if err != nil {
+			return err
+		}
+
+		for _, sigInfo := range repoMeta.Signatures[digest.String()][CosignType] {
+			layersInfo := []LayerInfo{}
+
+			for _, layerInfo := range sigInfo.LayersInfo {
+				signer := ""
+
+				for _, file := range files {
+					if !file.IsDir() {
+						// cosign verify the image
+						ctx := context.Background()
+						keyRef := path.Join(layerSigPath, file.Name())
+						hashAlgorithm := crypto.SHA256
+
+						pubKey, err := sigs.PublicKeyFromKeyRefWithHashAlgo(ctx, keyRef, hashAlgorithm)
+						if err != nil {
+							continue
+						}
+
+						pkcs11Key, ok := pubKey.(*pkcs11key.Key)
+						if ok {
+							defer pkcs11Key.Close()
+						}
+
+						verifier := pubKey
+
+						b64sig := layerInfo.SignatureKey
+
+						signature, err := base64.StdEncoding.DecodeString(b64sig)
+						if err != nil {
+							continue
+						}
+
+						compressed := io.NopCloser(bytes.NewReader(layerInfo.LayerContent))
+
+						payload, err := io.ReadAll(compressed)
+						if err != nil {
+							continue
+						}
+
+						err = verifier.VerifySignature(bytes.NewReader(signature), bytes.NewReader(payload), options.WithContext(ctx))
+
+						if err == nil {
+							publicKey, err := os.ReadFile(keyRef)
+							if err != nil {
+								continue
+							}
+
+							signer = string(publicKey)
+
+							break
+						}
+					}
+				}
+
+				layerInfo.Signer = strings.TrimSuffix(signer, "\n")
+				layersInfo = append(layersInfo, layerInfo)
+			}
+
+			signatureInfo = append(signatureInfo, SignatureInfo{
+				SignatureManifestDigest: sigInfo.SignatureManifestDigest,
+				LayersInfo:              layersInfo,
+			})
+		}
+
+		repoMeta.Signatures[digest.String()][CosignType] = signatureInfo
+
+		repoMetaBlob, err = json.Marshal(repoMeta)
+		if err != nil {
+			return err
+		}
+
+		return buck.Put([]byte(repo), repoMetaBlob)
+	})
+
+	return err
+}
+
+func (bdw BoltDBWrapper) verifyNotationSignatures() error {
+	return nil
+}
+
+func (bdw BoltDBWrapper) VerifyManifestSignatures(repo string, manifestDigest godigest.Digest) error {
+	notationSigs := false
+	cosignSigs := true
+
+	err := bdw.db.View(func(tx *bolt.Tx) error {
+		buck := tx.Bucket([]byte(RepoMetadataBucket))
+
+		buck.Get([]byte(repo))
+		repoMetaBlob := buck.Get([]byte(repo))
+		if repoMetaBlob == nil {
+			return zerr.ErrRepoMetaNotFound
+		}
+
+		var repoMeta RepoMetadata
+
+		err := json.Unmarshal(repoMetaBlob, &repoMeta)
+		if err != nil {
+			return err
+		}
+
+		_, cosignSigs = repoMeta.Signatures[manifestDigest.String()][CosignType]
+
+		_, notationSigs = repoMeta.Signatures[manifestDigest.String()][NotationType]
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if cosignSigs {
+		err = bdw.verifyCosignSignatures(repo, manifestDigest)
+		if err != nil {
+			return err
+		}
+	}
+
+	if notationSigs {
+		err = bdw.verifyNotationSignatures()
+	}
+
+	return err
+}
+
 func (bdw BoltDBWrapper) AddManifestSignature(repo string, signedManifestDigest godigest.Digest,
 	sygMeta SignatureMetadata,
 ) error {
@@ -554,17 +719,27 @@ func (bdw BoltDBWrapper) AddManifestSignature(repo string, signedManifestDigest 
 		}
 
 		var (
-			manifestSignatures map[string][]string
+			manifestSignatures ManifestSignatures
 			found              bool
 		)
 
 		if manifestSignatures, found = repoMeta.Signatures[signedManifestDigest.String()]; !found {
-			manifestSignatures = map[string][]string{}
+			manifestSignatures = ManifestSignatures{}
 		}
 
 		signatureSlice := manifestSignatures[sygMeta.SignatureType]
 		if !signatureAlreadyExists(signatureSlice, sygMeta) {
-			signatureSlice = append(signatureSlice, sygMeta.SignatureDigest.String())
+			if sygMeta.SignatureType == NotationType {
+				signatureSlice = append(signatureSlice, SignatureInfo{
+					SignatureManifestDigest: sygMeta.SignatureDigest,
+					LayersInfo:              sygMeta.LayersInfo,
+				})
+			} else if sygMeta.SignatureType == CosignType {
+				signatureSlice = []SignatureInfo{{
+					SignatureManifestDigest: sygMeta.SignatureDigest,
+					LayersInfo:              sygMeta.LayersInfo,
+				}}
+			}
 		}
 
 		manifestSignatures[sygMeta.SignatureType] = signatureSlice
@@ -582,9 +757,9 @@ func (bdw BoltDBWrapper) AddManifestSignature(repo string, signedManifestDigest 
 	return err
 }
 
-func signatureAlreadyExists(signatureSlice []string, sm SignatureMetadata) bool {
-	for _, sigDigest := range signatureSlice {
-		if sm.SignatureDigest.String() == sigDigest {
+func signatureAlreadyExists(signatureSlice []SignatureInfo, sm SignatureMetadata) bool {
+	for _, sigInfo := range signatureSlice {
+		if sm.SignatureDigest == sigInfo.SignatureManifestDigest {
 			return true
 		}
 	}
@@ -613,7 +788,7 @@ func (bdw BoltDBWrapper) DeleteSignature(repo string, signedManifestDigest godig
 		sigType := sigMeta.SignatureType
 
 		var (
-			manifestSignatures map[string][]string
+			manifestSignatures ManifestSignatures
 			found              bool
 		)
 
@@ -623,10 +798,10 @@ func (bdw BoltDBWrapper) DeleteSignature(repo string, signedManifestDigest godig
 
 		signatureSlice := manifestSignatures[sigType]
 
-		newSignatureSlice := make([]string, 0, len(signatureSlice)-1)
+		newSignatureSlice := make([]SignatureInfo, 0, len(signatureSlice)-1)
 
 		for _, sigDigest := range signatureSlice {
-			if sigDigest != sigMeta.SignatureDigest.String() {
+			if sigDigest.SignatureManifestDigest != sigMeta.SignatureDigest {
 				newSignatureSlice = append(newSignatureSlice, sigDigest)
 			}
 		}
@@ -773,7 +948,7 @@ func (bdw BoltDBWrapper) SearchRepos(ctx context.Context, searchText string, fil
 	return foundRepos, foundManifestMetadataMap, pageInfo, err
 }
 
-func checkIsSigned(signatures map[string][]string) bool {
+func checkIsSigned(signatures ManifestSignatures) bool {
 	for _, signatures := range signatures {
 		if len(signatures) > 0 {
 			return true
