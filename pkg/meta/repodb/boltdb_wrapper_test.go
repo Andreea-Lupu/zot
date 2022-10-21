@@ -95,30 +95,30 @@ func TestBoltDBWrapper(t *testing.T) {
 			)
 
 			Convey("Setting a good repo", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				repoMeta, err := repoDB.GetRepoMeta(repo1)
 				So(err, ShouldBeNil)
-				So(repoMeta.Tags[tag1], ShouldEqual, manifestDigest1)
+				So(repoMeta.Tags[tag1].Digest, ShouldEqual, manifestDigest1)
 			})
 
 			Convey("Set multiple tags for repo", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+				err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				repoMeta, err := repoDB.GetRepoMeta(repo1)
 				So(err, ShouldBeNil)
-				So(repoMeta.Tags[tag1], ShouldEqual, manifestDigest1)
-				So(repoMeta.Tags[tag2], ShouldEqual, manifestDigest2)
+				So(repoMeta.Tags[tag1].Digest, ShouldEqual, manifestDigest1)
+				So(repoMeta.Tags[tag2].Digest, ShouldEqual, manifestDigest2)
 			})
 
 			Convey("Set multiple repos", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest2)
+				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				repoMeta1, err := repoDB.GetRepoMeta(repo1)
@@ -126,23 +126,23 @@ func TestBoltDBWrapper(t *testing.T) {
 				repoMeta2, err := repoDB.GetRepoMeta(repo2)
 				So(err, ShouldBeNil)
 
-				So(repoMeta1.Tags[tag1], ShouldResemble, manifestDigest1.String())
-				So(repoMeta2.Tags[tag2], ShouldResemble, manifestDigest2.String())
+				So(repoMeta1.Tags[tag1].Digest, ShouldResemble, manifestDigest1.String())
+				So(repoMeta2.Tags[tag2].Digest, ShouldResemble, manifestDigest2.String())
 			})
 
 			Convey("Setting a repo with invalid fields", func() {
 				Convey("Repo name is not valid", func() {
-					err := repoDB.SetRepoTag("", tag1, manifestDigest1)
+					err := repoDB.SetRepoTag("", tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 					So(err, ShouldNotBeNil)
 				})
 
 				Convey("Tag is not valid", func() {
-					err = repoDB.SetRepoTag(repo1, "", manifestDigest1)
+					err = repoDB.SetRepoTag(repo1, "", manifestDigest1, ispec.MediaTypeImageManifest)
 					So(err, ShouldNotBeNil)
 				})
 
 				Convey("Manifest Digest is not valid", func() {
-					err = repoDB.SetRepoTag(repo1, tag1, "")
+					err = repoDB.SetRepoTag(repo1, tag1, "", ispec.MediaTypeImageManifest)
 					So(err, ShouldNotBeNil)
 				})
 			})
@@ -161,20 +161,20 @@ func TestBoltDBWrapper(t *testing.T) {
 				InexistentRepo = "InexistentRepo"
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
-			err = repoDB.SetRepoTag(repo2, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo2, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			Convey("Get a existent repo", func() {
 				repoMeta1, err := repoDB.GetRepoMeta(repo1)
 				So(err, ShouldBeNil)
-				So(repoMeta1.Tags[tag1], ShouldResemble, manifestDigest1.String())
+				So(repoMeta1.Tags[tag1].Digest, ShouldResemble, manifestDigest1.String())
 
 				repoMeta2, err := repoDB.GetRepoMeta(repo2)
 				So(err, ShouldBeNil)
-				So(repoMeta2.Tags[tag2], ShouldResemble, manifestDigest2.String())
+				So(repoMeta2.Tags[tag2].Digest, ShouldResemble, manifestDigest2.String())
 			})
 
 			Convey("Get a repo that doesn't exist", func() {
@@ -193,10 +193,10 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest2 = digest.FromString("fake-manifest2")
 			)
 
-			err := repoDB.SetRepoTag(repo, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
-			err = repoDB.SetRepoTag(repo, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			Convey("Delete from repo a tag", func() {
@@ -211,7 +211,7 @@ func TestBoltDBWrapper(t *testing.T) {
 
 				_, ok := repoMeta.Tags[tag1]
 				So(ok, ShouldBeFalse)
-				So(repoMeta.Tags[tag2], ShouldResemble, manifestDigest2.String())
+				So(repoMeta.Tags[tag2].Digest, ShouldResemble, manifestDigest2.String())
 			})
 
 			Convey("Delete all tags from repo", func() {
@@ -232,8 +232,8 @@ func TestBoltDBWrapper(t *testing.T) {
 				repoMeta, err := repoDB.GetRepoMeta(repo)
 				So(err, ShouldBeNil)
 
-				So(repoMeta.Tags[tag1], ShouldResemble, manifestDigest1.String())
-				So(repoMeta.Tags[tag2], ShouldResemble, manifestDigest2.String())
+				So(repoMeta.Tags[tag1].Digest, ShouldResemble, manifestDigest1.String())
+				So(repoMeta.Tags[tag2].Digest, ShouldResemble, manifestDigest2.String())
 			})
 
 			Convey("Delete from inexistent repo", func() {
@@ -243,8 +243,8 @@ func TestBoltDBWrapper(t *testing.T) {
 				repoMeta, err := repoDB.GetRepoMeta(repo)
 				So(err, ShouldBeNil)
 
-				So(repoMeta.Tags[tag1], ShouldResemble, manifestDigest1.String())
-				So(repoMeta.Tags[tag2], ShouldResemble, manifestDigest2.String())
+				So(repoMeta.Tags[tag1].Digest, ShouldResemble, manifestDigest1.String())
+				So(repoMeta.Tags[tag2].Digest, ShouldResemble, manifestDigest2.String())
 			})
 		})
 
@@ -258,13 +258,13 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest2 = digest.FromString("fake-manifest2")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
-			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
-			err = repoDB.SetRepoTag(repo2, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo2, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			Convey("Get all Repometa", func() {
@@ -287,7 +287,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				}, repodb.PageInput{})
 				So(err, ShouldBeNil)
 				So(len(repoMetaSlice), ShouldEqual, 1)
-				So(repoMetaSlice[0].Tags[tag1] == manifestDigest1.String(), ShouldBeTrue)
+				So(repoMetaSlice[0].Tags[tag1].Digest == manifestDigest1.String(), ShouldBeTrue)
 			})
 		})
 
@@ -298,7 +298,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest1 = digest.FromString("fake-manifest1")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.IncrementRepoStars(repo1)
@@ -330,7 +330,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest1 = digest.FromString("fake-manifest1")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.IncrementRepoStars(repo1)
@@ -366,7 +366,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				description     = "This is a test description"
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.SetRepoDescription(repo1, description)
@@ -388,7 +388,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				logoPath        = "This is a fake logo path"
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.SetRepoLogo(repo1, logoPath)
@@ -409,7 +409,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest1 = digest.FromString("fake-manifest1")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.IncrementRepoStars(repo1)
@@ -471,7 +471,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest1 = digest.FromString("fake-manifest1")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.SetManifestMeta(manifestDigest1, repodb.ManifestMetadata{})
@@ -498,7 +498,7 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest1 = digest.FromString("fake-manifest1")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.SetManifestMeta(manifestDigest1, repodb.ManifestMetadata{})
@@ -558,11 +558,11 @@ func TestBoltDBWrapper(t *testing.T) {
 			}
 
 			Convey("Search all repos", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+				err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo2, tag3, manifestDigest3)
+				err = repoDB.SetRepoTag(repo2, tag3, manifestDigest3, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)
@@ -582,7 +582,7 @@ func TestBoltDBWrapper(t *testing.T) {
 			})
 
 			Convey("Search a repo by name", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)
@@ -596,10 +596,10 @@ func TestBoltDBWrapper(t *testing.T) {
 			})
 
 			Convey("Search non-existing repo by name", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
-				err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+				err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				repos, manifesMetaMap, _, err := repoDB.SearchRepos(ctx, "RepoThatDoesntExist", repodb.Filter{}, repodb.PageInput{})
@@ -609,11 +609,11 @@ func TestBoltDBWrapper(t *testing.T) {
 			})
 
 			Convey("Search with partial match", func() {
-				err := repoDB.SetRepoTag("alpine", tag1, manifestDigest1)
+				err := repoDB.SetRepoTag("alpine", tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag("pine", tag2, manifestDigest2)
+				err = repoDB.SetRepoTag("pine", tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag("golang", tag3, manifestDigest3)
+				err = repoDB.SetRepoTag("golang", tag3, manifestDigest3, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)
@@ -632,11 +632,11 @@ func TestBoltDBWrapper(t *testing.T) {
 			})
 
 			Convey("Search multiple repos that share manifests", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest1)
+				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo3, tag3, manifestDigest1)
+				err = repoDB.SetRepoTag(repo3, tag3, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)
@@ -651,11 +651,11 @@ func TestBoltDBWrapper(t *testing.T) {
 			})
 
 			Convey("Search repos with access control", func() {
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest1)
+				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo3, tag3, manifestDigest1)
+				err = repoDB.SetRepoTag(repo3, tag3, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)
@@ -713,7 +713,7 @@ func TestBoltDBWrapper(t *testing.T) {
 
 					repoName := "repo" + strconv.Itoa(i)
 
-					err = repoDB.SetRepoTag(repoName, tag1, manifestDigest)
+					err = repoDB.SetRepoTag(repoName, tag1, manifestDigest, ispec.MediaTypeImageManifest)
 					So(err, ShouldBeNil)
 
 					repoNameBuilder.Reset()
@@ -869,17 +869,17 @@ func TestBoltDBWrapper(t *testing.T) {
 				ConfigBlob:   emptyConfigBlob,
 			}
 
-			err = repoDB.SetRepoTag(repo1, "0.0.1", manifestDigest1)
+			err = repoDB.SetRepoTag(repo1, "0.0.1", manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, "0.0.2", manifestDigest3)
+			err = repoDB.SetRepoTag(repo1, "0.0.2", manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, "0.1.0", manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, "0.1.0", manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, "1.0.0", manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, "1.0.0", manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, "1.0.1", manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, "1.0.1", manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo2, "0.0.1", manifestDigest3)
+			err = repoDB.SetRepoTag(repo2, "0.0.1", manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)
@@ -946,11 +946,11 @@ func TestBoltDBWrapper(t *testing.T) {
 					tag3            = "0.0.3"
 				)
 
-				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+				err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest1)
+				err = repoDB.SetRepoTag(repo2, tag2, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
-				err = repoDB.SetRepoTag(repo3, tag3, manifestDigest1)
+				err = repoDB.SetRepoTag(repo3, tag3, manifestDigest1, ispec.MediaTypeImageManifest)
 				So(err, ShouldBeNil)
 
 				config := ispec.Image{}
@@ -995,15 +995,15 @@ func TestBoltDBWrapper(t *testing.T) {
 				tag5            = "0.0.5"
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest1)
+			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag3, manifestDigest1)
+			err = repoDB.SetRepoTag(repo1, tag3, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag4, manifestDigest1)
+			err = repoDB.SetRepoTag(repo1, tag4, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag5, manifestDigest1)
+			err = repoDB.SetRepoTag(repo1, tag5, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			config := ispec.Image{}
@@ -1070,15 +1070,15 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest3 = digest.FromString("fake-manifest3")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo2, tag1, manifestDigest1)
+			err = repoDB.SetRepoTag(repo2, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo3, tag1, manifestDigest2)
+			err = repoDB.SetRepoTag(repo3, tag1, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo4, tag1, manifestDigest3)
+			err = repoDB.SetRepoTag(repo4, tag1, manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			config1 := ispec.Image{
@@ -1178,15 +1178,15 @@ func TestBoltDBWrapper(t *testing.T) {
 				manifestDigest3 = digest.FromString("fake-manifest3")
 			)
 
-			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err := repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo2, tag1, manifestDigest1)
+			err = repoDB.SetRepoTag(repo2, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo3, tag1, manifestDigest2)
+			err = repoDB.SetRepoTag(repo3, tag1, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo4, tag1, manifestDigest3)
+			err = repoDB.SetRepoTag(repo4, tag1, manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			config1 := ispec.Image{
@@ -1308,15 +1308,15 @@ func TestRelevanceSorting(t *testing.T) {
 				ConfigBlob:   emptyConfigBlob,
 			}
 
-			err = repoDB.SetRepoTag(repo1, tag1, manifestDigest1)
+			err = repoDB.SetRepoTag(repo1, tag1, manifestDigest1, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2)
+			err = repoDB.SetRepoTag(repo1, tag2, manifestDigest2, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo2, tag3, manifestDigest3)
+			err = repoDB.SetRepoTag(repo2, tag3, manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo3, tag3, manifestDigest3)
+			err = repoDB.SetRepoTag(repo3, tag3, manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
-			err = repoDB.SetRepoTag(repo4, tag1, manifestDigest3)
+			err = repoDB.SetRepoTag(repo4, tag1, manifestDigest3, ispec.MediaTypeImageManifest)
 			So(err, ShouldBeNil)
 
 			err = repoDB.SetManifestMeta(manifestDigest1, emptyRepoMeta)

@@ -3,6 +3,7 @@ package repodb_test
 import (
 	"testing"
 
+	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"zotregistry.io/zot/pkg/meta/repodb"
@@ -65,8 +66,8 @@ func TestPagination(t *testing.T) {
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo1",
-						Tags: map[string]string{
-							"tag1": "dig1",
+						Tags: map[string]repodb.Descriptor{
+							"tag1": {Digest: "dig1", MediaType: ispec.MediaTypeImageManifest},
 						},
 					},
 				})
@@ -74,11 +75,11 @@ func TestPagination(t *testing.T) {
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo2",
-						Tags: map[string]string{
-							"Tag1": "dig1",
-							"Tag2": "dig2",
-							"Tag3": "dig3",
-							"Tag4": "dig4",
+						Tags: map[string]repodb.Descriptor{
+							"Tag1": {Digest: "dig1", MediaType: ispec.MediaTypeImageManifest},
+							"Tag2": {Digest: "dig2", MediaType: ispec.MediaTypeImageManifest},
+							"Tag3": {Digest: "dig3", MediaType: ispec.MediaTypeImageManifest},
+							"Tag4": {Digest: "dig4", MediaType: ispec.MediaTypeImageManifest},
 						},
 					},
 				})
@@ -94,8 +95,11 @@ func TestPagination(t *testing.T) {
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo1",
-						Tags: map[string]string{
-							"tag1": "dig1",
+						Tags: map[string]repodb.Descriptor{
+							"tag1": {
+								Digest:    "dig1",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
 						},
 					},
 				})
@@ -103,22 +107,46 @@ func TestPagination(t *testing.T) {
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo2",
-						Tags: map[string]string{
-							"Tag1": "dig1",
-							"Tag2": "dig2",
-							"Tag3": "dig3",
-							"Tag4": "dig4",
+						Tags: map[string]repodb.Descriptor{
+							"Tag1": {
+								Digest:    "dig1",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
+							"Tag2": {
+								Digest:    "dig2",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
+							"Tag3": {
+								Digest:    "dig3",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
+							"Tag4": {
+								Digest:    "dig4",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
 						},
 					},
 				})
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo3",
-						Tags: map[string]string{
-							"Tag11": "dig11",
-							"Tag12": "dig12",
-							"Tag13": "dig13",
-							"Tag14": "dig14",
+						Tags: map[string]repodb.Descriptor{
+							"Tag11": {
+								Digest:    "dig11",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
+							"Tag12": {
+								Digest:    "dig12",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
+							"Tag13": {
+								Digest:    "dig13",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
+							"Tag14": {
+								Digest:    "dig14",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
 						},
 					},
 				})
@@ -141,8 +169,11 @@ func TestPagination(t *testing.T) {
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo1",
-						Tags: map[string]string{
-							"tag1": "dig1",
+						Tags: map[string]repodb.Descriptor{
+							"tag1": {
+								Digest:    "dig1",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
 						},
 					},
 				})
@@ -150,16 +181,22 @@ func TestPagination(t *testing.T) {
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo2",
-						Tags: map[string]string{
-							"Tag1": "dig1",
+						Tags: map[string]repodb.Descriptor{
+							"Tag1": {
+								Digest:    "dig1",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
 						},
 					},
 				})
 				paginator.Add(repodb.DetailedRepoMeta{
 					RepoMeta: repodb.RepoMetadata{
 						Name: "repo3",
-						Tags: map[string]string{
-							"Tag11": "dig11",
+						Tags: map[string]repodb.Descriptor{
+							"Tag11": {
+								Digest:    "dig11",
+								MediaType: ispec.MediaTypeImageManifest,
+							},
 						},
 					},
 				})

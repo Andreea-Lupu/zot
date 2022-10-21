@@ -107,7 +107,9 @@ func (bdw BoltDBWrapper) GetManifestMeta(manifestDigest godigest.Digest) (Manife
 	return manifestMetadata, err
 }
 
-func (bdw BoltDBWrapper) SetRepoTag(repo string, tag string, manifestDigest godigest.Digest) error {
+func (bdw BoltDBWrapper) SetRepoTag(repo string, tag string, manifestDigest godigest.Digest,
+	mediaType string,
+) error {
 	if err := validateRepoTagInput(repo, tag, manifestDigest); err != nil {
 		return err
 	}
@@ -122,8 +124,11 @@ func (bdw BoltDBWrapper) SetRepoTag(repo string, tag string, manifestDigest godi
 			// create a new object
 			repoMeta := RepoMetadata{
 				Name: repo,
-				Tags: map[string]string{
-					tag: manifestDigest.String(),
+				Tags: map[string]Descriptor{
+					tag: {
+						Digest:    manifestDigest.String(),
+						MediaType: mediaType,
+					},
 				},
 			}
 
@@ -143,7 +148,10 @@ func (bdw BoltDBWrapper) SetRepoTag(repo string, tag string, manifestDigest godi
 			return err
 		}
 
-		repoMeta.Tags[tag] = manifestDigest.String()
+		repoMeta.Tags[tag] = Descriptor{
+			Digest:    manifestDigest.String(),
+			MediaType: mediaType,
+		}
 
 		repoMetaBlob, err = json.Marshal(repoMeta)
 		if err != nil {
@@ -577,20 +585,20 @@ func (bdw BoltDBWrapper) SearchRepos(ctx context.Context, searchText string, fil
 					isSigned          = false
 				)
 
-				for _, manifestDigest := range repoMeta.Tags {
+				for _, descriptor := range repoMeta.Tags {
 					var manifestMeta ManifestMetadata
 
-					manifestMeta, manifestDownloaded := manifestMetadataMap[manifestDigest]
+					manifestMeta, manifestDownloaded := manifestMetadataMap[descriptor.Digest]
 
 					if !manifestDownloaded {
-						manifestMetaBlob := manifestBuck.Get([]byte(manifestDigest))
+						manifestMetaBlob := manifestBuck.Get([]byte(descriptor.Digest))
 						if manifestMetaBlob == nil {
 							return zerr.ErrManifestMetaNotFound
 						}
 
 						err := json.Unmarshal(manifestMetaBlob, &manifestMeta)
 						if err != nil {
-							return errors.Wrapf(err, "repodb: error while unmarshaling manifest metadata for digest %s", manifestDigest)
+							return errors.Wrapf(err, "repodb: error while unmarshaling manifest metadata for digest %s", descriptor.Digest)
 						}
 					}
 
@@ -599,7 +607,7 @@ func (bdw BoltDBWrapper) SearchRepos(ctx context.Context, searchText string, fil
 
 					err = json.Unmarshal(manifestMeta.ConfigBlob, &configContent)
 					if err != nil {
-						return errors.Wrapf(err, "repodb: error while unmarshaling config content for digest %s", manifestDigest)
+						return errors.Wrapf(err, "repodb: error while unmarshaling config content for digest %s", descriptor.Digest)
 					}
 
 					osSet[configContent.OS] = true
@@ -610,7 +618,8 @@ func (bdw BoltDBWrapper) SearchRepos(ctx context.Context, searchText string, fil
 
 					imageLastUpdated, err := getImageLastUpdatedTimestamp(manifestMeta.ConfigBlob)
 					if err != nil {
-						return errors.Wrapf(err, "repodb: error while unmarshaling image config referenced by digest %s", manifestDigest)
+						return errors.Wrapf(err, "repodb: error while unmarshaling image config referenced by digest %s",
+							descriptor.Digest)
 					}
 
 					if firstImageChecked || repoLastUpdated.Before(imageLastUpdated) {
@@ -620,7 +629,7 @@ func (bdw BoltDBWrapper) SearchRepos(ctx context.Context, searchText string, fil
 						isSigned = checkIsSigned(manifestMeta.Signatures)
 					}
 
-					manifestMetadataMap[manifestDigest] = manifestMeta
+					manifestMetadataMap[descriptor.Digest] = manifestMeta
 				}
 
 				repoFilterData := filterData{
@@ -647,7 +656,7 @@ func (bdw BoltDBWrapper) SearchRepos(ctx context.Context, searchText string, fil
 		// keep just the manifestMeta we need
 		for _, repoMeta := range foundRepos {
 			for _, manifestDigest := range repoMeta.Tags {
-				foundManifestMetadataMap[manifestDigest] = manifestMetadataMap[manifestDigest]
+				foundManifestMetadataMap[manifestDigest.Digest] = manifestMetadataMap[manifestDigest.Digest]
 			}
 		}
 
@@ -746,10 +755,11 @@ func (bdw BoltDBWrapper) FilterTags(ctx context.Context, filter FilterFunc,
 				return err
 			}
 
-			matchedTags := make(map[string]string)
+			matchedTags := make(map[string]Descriptor)
 			// take all manifestMetas
-			for tag, manifestDigest := range repoMeta.Tags {
-				matchedTags[tag] = manifestDigest
+			for tag, descriptor := range repoMeta.Tags {
+				manifestDigest := descriptor.Digest
+				matchedTags[tag] = descriptor
 
 				// in case tags reference the same manifest we don't download from DB multiple times
 				if manifestMeta, manifestExists := manifestMetadataMap[manifestDigest]; manifestExists {
@@ -798,8 +808,8 @@ func (bdw BoltDBWrapper) FilterTags(ctx context.Context, filter FilterFunc,
 
 		// keep just the manifestMeta we need
 		for _, repoMeta := range foundRepos {
-			for _, manifestDigest := range repoMeta.Tags {
-				foundManifestMetadataMap[manifestDigest] = manifestMetadataMap[manifestDigest]
+			for _, descriptor := range repoMeta.Tags {
+				foundManifestMetadataMap[descriptor.Digest] = manifestMetadataMap[descriptor.Digest]
 			}
 		}
 
@@ -853,23 +863,23 @@ func (bdw BoltDBWrapper) SearchTags(ctx context.Context, searchText string, filt
 			}
 
 			if string(repoName) == searchedRepo {
-				matchedTags := make(map[string]string)
+				matchedTags := make(map[string]Descriptor)
 				// take all manifestMetas
-				for tag, manifestDigest := range repoMeta.Tags {
+				for tag, descriptor := range repoMeta.Tags {
 					if !strings.HasPrefix(tag, searchedTag) {
 						continue
 					}
 
-					matchedTags[tag] = manifestDigest
+					matchedTags[tag] = descriptor
 
 					// in case tags reference the same manifest we don't download from DB multiple times
-					if manifestMeta, manifestExists := manifestMetadataMap[manifestDigest]; manifestExists {
-						manifestMetadataMap[manifestDigest] = manifestMeta
+					if manifestMeta, manifestExists := manifestMetadataMap[descriptor.Digest]; manifestExists {
+						manifestMetadataMap[descriptor.Digest] = manifestMeta
 
 						continue
 					}
 
-					manifestMetaBlob := manifestBuck.Get([]byte(manifestDigest))
+					manifestMetaBlob := manifestBuck.Get([]byte(descriptor.Digest))
 					if manifestMetaBlob == nil {
 						return zerr.ErrManifestMetaNotFound
 					}
@@ -878,14 +888,14 @@ func (bdw BoltDBWrapper) SearchTags(ctx context.Context, searchText string, filt
 
 					err := json.Unmarshal(manifestMetaBlob, &manifestMeta)
 					if err != nil {
-						return errors.Wrapf(err, "repodb: error while unmashaling manifest metadata for digest %s", manifestDigest)
+						return errors.Wrapf(err, "repodb: error while unmashaling manifest metadata for digest %s", descriptor.Digest)
 					}
 
 					var configContent ispec.Image
 
 					err = json.Unmarshal(manifestMeta.ConfigBlob, &configContent)
 					if err != nil {
-						return errors.Wrapf(err, "repodb: error while unmashaling manifest metadata for digest %s", manifestDigest)
+						return errors.Wrapf(err, "repodb: error while unmashaling manifest metadata for digest %s", descriptor.Digest)
 					}
 
 					imageFilterData := filterData{
@@ -896,12 +906,12 @@ func (bdw BoltDBWrapper) SearchTags(ctx context.Context, searchText string, filt
 
 					if !acceptedByFilter(filter, imageFilterData) {
 						delete(matchedTags, tag)
-						delete(manifestMetadataMap, manifestDigest)
+						delete(manifestMetadataMap, descriptor.Digest)
 
 						continue
 					}
 
-					manifestMetadataMap[manifestDigest] = manifestMeta
+					manifestMetadataMap[descriptor.Digest] = manifestMeta
 				}
 
 				if len(matchedTags) == 0 {
@@ -920,8 +930,8 @@ func (bdw BoltDBWrapper) SearchTags(ctx context.Context, searchText string, filt
 
 		// keep just the manifestMeta we need
 		for _, repoMeta := range foundRepos {
-			for _, manifestDigest := range repoMeta.Tags {
-				foundManifestMetadataMap[manifestDigest] = manifestMetadataMap[manifestDigest]
+			for _, descriptor := range repoMeta.Tags {
+				foundManifestMetadataMap[descriptor.Digest] = manifestMetadataMap[descriptor.Digest]
 			}
 		}
 

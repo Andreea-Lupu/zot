@@ -55,9 +55,15 @@ func TestGlobalSearch(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "repo1",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
-								"1.0.2": "digestTag1.0.2",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {
+									Digest:    "digestTag1.0.1",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
+								"1.0.2": {
+									Digest:    "digestTag1.0.2",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -145,8 +151,11 @@ func TestGlobalSearch(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "repo1",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {
+									Digest:    "digestTag1.0.1",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -215,8 +224,11 @@ func TestGlobalSearch(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "repo1",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {
+									Digest:    "digestTag1.0.1",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -304,8 +316,11 @@ func TestGlobalSearch(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "repo1",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {
+									Digest:    "digestTag1.0.1",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -419,8 +434,11 @@ func TestRepoListWithNewestImage(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "repo1",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {
+									Digest:    "digestTag1.0.1",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -429,8 +447,11 @@ func TestRepoListWithNewestImage(t *testing.T) {
 						},
 						{
 							Name: "repo2",
-							Tags: map[string]string{
-								"1.0.2": "digestTag1.0.2",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.2": {
+									Digest:    "digestTag1.0.2",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -502,8 +523,11 @@ func TestRepoListWithNewestImage(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "repo1",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {
+									Digest:    "digestTag1.0.1",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -512,8 +536,11 @@ func TestRepoListWithNewestImage(t *testing.T) {
 						},
 						{
 							Name: "repo2",
-							Tags: map[string]string{
-								"1.0.2": "digestTag1.0.2",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.2": {
+									Digest:    "digestTag1.0.2",
+									MediaType: ispec.MediaTypeImageManifest,
+								},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -637,8 +664,8 @@ func TestImageListForDigest(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: "digestTag1.0.1", MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -693,8 +720,8 @@ func TestImageListForDigest(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": manifestDigest,
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -719,10 +746,10 @@ func TestImageListForDigest(t *testing.T) {
 						},
 					}
 					matchedTags := repos[0].Tags
-					for tag, manifestDigest := range repos[0].Tags {
-						if !filter(repos[0], manifestMetaDatas[manifestDigest]) {
+					for tag, descriptor := range repos[0].Tags {
+						if !filter(repos[0], manifestMetaDatas[descriptor.Digest]) {
 							delete(matchedTags, tag)
-							delete(manifestMetaDatas, manifestDigest)
+							delete(manifestMetaDatas, descriptor.Digest)
 
 							continue
 						}
@@ -774,8 +801,8 @@ func TestImageListForDigest(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": manifestDigest,
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -805,10 +832,10 @@ func TestImageListForDigest(t *testing.T) {
 					}
 
 					matchedTags := repos[0].Tags
-					for tag, manifestDigest := range repos[0].Tags {
-						if !filter(repos[0], manifestMetaDatas[manifestDigest]) {
+					for tag, descriptor := range repos[0].Tags {
+						if !filter(repos[0], manifestMetaDatas[descriptor.Digest]) {
 							delete(matchedTags, tag)
-							delete(manifestMetaDatas, manifestDigest)
+							delete(manifestMetaDatas, descriptor.Digest)
 
 							continue
 						}
@@ -856,8 +883,8 @@ func TestImageListForDigest(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": manifestDigest,
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -889,10 +916,10 @@ func TestImageListForDigest(t *testing.T) {
 					}
 
 					matchedTags := repos[0].Tags
-					for tag, manifestDigest := range repos[0].Tags {
-						if !filter(repos[0], manifestMetaDatas[manifestDigest]) {
+					for tag, descriptor := range repos[0].Tags {
+						if !filter(repos[0], manifestMetaDatas[descriptor.Digest]) {
 							delete(matchedTags, tag)
-							delete(manifestMetaDatas, manifestDigest)
+							delete(manifestMetaDatas, descriptor.Digest)
 
 							continue
 						}
@@ -938,9 +965,9 @@ func TestImageListForDigest(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": manifestDigest,
-								"1.0.2": manifestDigest,
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
+								"1.0.2": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -965,10 +992,10 @@ func TestImageListForDigest(t *testing.T) {
 					for i, repo := range repos {
 						matchedTags := repo.Tags
 
-						for tag, manifestDigest := range repo.Tags {
-							if !filter(repo, manifestMetaDatas[manifestDigest]) {
+						for tag, descriptor := range repo.Tags {
+							if !filter(repo, manifestMetaDatas[descriptor.Digest]) {
 								delete(matchedTags, tag)
-								delete(manifestMetaDatas, manifestDigest)
+								delete(manifestMetaDatas, descriptor.Digest)
 
 								continue
 							}
@@ -1020,9 +1047,9 @@ func TestImageListForDigest(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": manifestDigest,
-								"1.0.2": manifestDigest,
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
+								"1.0.2": {Digest: manifestDigest, MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -1047,10 +1074,10 @@ func TestImageListForDigest(t *testing.T) {
 					for i, repo := range repos {
 						matchedTags := repo.Tags
 
-						for tag, manifestDigest := range repo.Tags {
-							if !filter(repo, manifestMetaDatas[manifestDigest]) {
+						for tag, descriptor := range repo.Tags {
+							if !filter(repo, manifestMetaDatas[descriptor.Digest]) {
 								delete(matchedTags, tag)
-								delete(manifestMetaDatas, manifestDigest)
+								delete(manifestMetaDatas, descriptor.Digest)
 
 								continue
 							}
@@ -1116,8 +1143,8 @@ func TestImageList(t *testing.T) {
 					repos := []repodb.RepoMetadata{
 						{
 							Name: "test",
-							Tags: map[string]string{
-								"1.0.1": "digestTag1.0.1",
+							Tags: map[string]repodb.Descriptor{
+								"1.0.1": {Digest: "digestTag1.0.1", MediaType: ispec.MediaTypeImageManifest},
 							},
 							Signatures:  []string{"testSignature"},
 							Stars:       100,
@@ -1463,7 +1490,7 @@ func TestCVEResolvers(t *testing.T) { //nolint:gocyclo
 	for image, digest := range tagsMap {
 		repo, tag := common.GetImageDirAndTag(image)
 
-		err := repoDB.SetRepoTag(repo, tag, digest)
+		err := repoDB.SetRepoTag(repo, tag, digest, ispec.MediaTypeImageManifest)
 		if err != nil {
 			panic(err)
 		}
@@ -2054,8 +2081,8 @@ func TestDerivedImageList(t *testing.T) {
 			GetRepoMetaFn: func(repo string) (repodb.RepoMetadata, error) {
 				return repodb.RepoMetadata{
 					Name: "repo1",
-					Tags: map[string]string{
-						"1.0.1": manifestDigest.String(),
+					Tags: map[string]repodb.Descriptor{
+						"1.0.1": {Digest: manifestDigest.String(), MediaType: ispec.MediaTypeImageManifest},
 					},
 				}, nil
 			},
@@ -2195,8 +2222,8 @@ func TestDerivedImageList(t *testing.T) {
 			GetRepoMetaFn: func(repo string) (repodb.RepoMetadata, error) {
 				return repodb.RepoMetadata{
 					Name: "repo1",
-					Tags: map[string]string{
-						"1.0.1": manifestDigest.String(),
+					Tags: map[string]repodb.Descriptor{
+						"1.0.1": {Digest: manifestDigest.String(), MediaType: ispec.MediaTypeImageManifest},
 					},
 				}, nil
 			},
@@ -2215,10 +2242,10 @@ func TestDerivedImageList(t *testing.T) {
 				repos := []repodb.RepoMetadata{
 					{
 						Name: "repo1",
-						Tags: map[string]string{
-							"1.0.1": "digestTag1.0.1",
-							"1.0.2": "digestTag1.0.2",
-							"1.0.3": "digestTag1.0.3",
+						Tags: map[string]repodb.Descriptor{
+							"1.0.1": {Digest: "digestTag1.0.1", MediaType: ispec.MediaTypeImageManifest},
+							"1.0.2": {Digest: "digestTag1.0.2", MediaType: ispec.MediaTypeImageManifest},
+							"1.0.3": {Digest: "digestTag1.0.3", MediaType: ispec.MediaTypeImageManifest},
 						},
 						Signatures:  []string{"testSignature"},
 						Stars:       100,
@@ -2230,7 +2257,9 @@ func TestDerivedImageList(t *testing.T) {
 				for i, repo := range repos {
 					matchedTags := repo.Tags
 
-					for tag, manifestDigest := range repo.Tags {
+					for tag, manifestDescriptor := range repo.Tags {
+						manifestDigest := manifestDescriptor.Digest
+
 						if !filter(repo, manifestMetas[manifestDigest]) {
 							delete(matchedTags, tag)
 							delete(manifestMetas, manifestDigest)
@@ -2333,8 +2362,8 @@ func TestBaseImageList(t *testing.T) {
 			GetRepoMetaFn: func(repo string) (repodb.RepoMetadata, error) {
 				return repodb.RepoMetadata{
 					Name: "repo1",
-					Tags: map[string]string{
-						"1.0.2": manifestDigest.String(),
+					Tags: map[string]repodb.Descriptor{
+						"1.0.2": {Digest: manifestDigest.String(), MediaType: ispec.MediaTypeImageManifest},
 					},
 				}, nil
 			},
@@ -2464,8 +2493,8 @@ func TestBaseImageList(t *testing.T) {
 			GetRepoMetaFn: func(repo string) (repodb.RepoMetadata, error) {
 				return repodb.RepoMetadata{
 					Name: "repo1",
-					Tags: map[string]string{
-						"1.0.2": derivedManifestDigest.String(),
+					Tags: map[string]repodb.Descriptor{
+						"1.0.2": {Digest: derivedManifestDigest.String(), MediaType: ispec.MediaTypeImageManifest},
 					},
 				}, nil
 			},
@@ -2484,10 +2513,10 @@ func TestBaseImageList(t *testing.T) {
 				repos := []repodb.RepoMetadata{
 					{
 						Name: "repo1",
-						Tags: map[string]string{
-							"1.0.1": "digestTag1.0.1",
-							"1.0.3": "digestTag1.0.1",
-							"1.0.2": "digestTag1.0.2",
+						Tags: map[string]repodb.Descriptor{
+							"1.0.1": {Digest: "digestTag1.0.1", MediaType: ispec.MediaTypeImageManifest},
+							"1.0.3": {Digest: "digestTag1.0.1", MediaType: ispec.MediaTypeImageManifest},
+							"1.0.2": {Digest: "digestTag1.0.2", MediaType: ispec.MediaTypeImageManifest},
 						},
 						Signatures:  []string{"testSignature"},
 						Stars:       100,
@@ -2499,7 +2528,9 @@ func TestBaseImageList(t *testing.T) {
 				for i, repo := range repos {
 					matchedTags := repo.Tags
 
-					for tag, manifestDigest := range repo.Tags {
+					for tag, manifestDescriptor := range repo.Tags {
+						manifestDigest := manifestDescriptor.Digest
+
 						if !filter(repo, manifestMetas[manifestDigest]) {
 							delete(matchedTags, tag)
 							delete(manifestMetas, manifestDigest)
@@ -2647,8 +2678,8 @@ func TestBaseImageList(t *testing.T) {
 			GetRepoMetaFn: func(repo string) (repodb.RepoMetadata, error) {
 				return repodb.RepoMetadata{
 					Name: "repo1",
-					Tags: map[string]string{
-						"1.0.2": derivedManifestDigest.String(),
+					Tags: map[string]repodb.Descriptor{
+						"1.0.2": {Digest: derivedManifestDigest.String(), MediaType: ispec.MediaTypeImageManifest},
 					},
 				}, nil
 			},
@@ -2667,9 +2698,9 @@ func TestBaseImageList(t *testing.T) {
 				repos := []repodb.RepoMetadata{
 					{
 						Name: "repo1",
-						Tags: map[string]string{
-							"1.0.1": "digestTag1.0.1",
-							"1.0.2": "digestTag1.0.2",
+						Tags: map[string]repodb.Descriptor{
+							"1.0.1": {Digest: "digestTag1.0.1", MediaType: ispec.MediaTypeImageManifest},
+							"1.0.2": {Digest: "digestTag1.0.2", MediaType: ispec.MediaTypeImageManifest},
 						},
 						Signatures:  []string{"testSignature"},
 						Stars:       100,
@@ -2681,7 +2712,9 @@ func TestBaseImageList(t *testing.T) {
 				for i, repo := range repos {
 					matchedTags := repo.Tags
 
-					for tag, manifestDigest := range repo.Tags {
+					for tag, manifestDescriptor := range repo.Tags {
+						manifestDigest := manifestDescriptor.Digest
+
 						if !filter(repo, manifestMetas[manifestDigest]) {
 							delete(matchedTags, tag)
 							delete(manifestMetas, manifestDigest)

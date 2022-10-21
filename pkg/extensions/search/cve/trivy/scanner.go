@@ -165,7 +165,7 @@ func (scanner Scanner) IsImageFormatScannable(image string) (bool, error) {
 		return false, zerr.ErrTagMetaNotFound
 	}
 
-	manifestDigest, err := godigest.Parse(manifestDigestStr)
+	manifestDigest, err := godigest.Parse(manifestDigestStr.Digest)
 	if err != nil {
 		return false, err
 	}

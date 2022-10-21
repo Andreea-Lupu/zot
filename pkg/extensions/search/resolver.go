@@ -145,10 +145,12 @@ func getImageSummary(ctx context.Context, repo, tag string, repoDB repodb.RepoDB
 		return nil, err
 	}
 
-	manifestDigest, ok := repoMeta.Tags[tag]
+	manifestDescriptor, ok := repoMeta.Tags[tag]
 	if !ok {
 		return nil, gqlerror.Errorf("can't find image: %s:%s", repo, tag)
 	}
+
+	manifestDigest := manifestDescriptor.Digest
 
 	for t := range repoMeta.Tags {
 		if t != tag {
@@ -853,7 +855,9 @@ func expandedRepoInfo(ctx context.Context, repo string, repoDB repodb.RepoDB, cv
 
 	manifestMetaMap := map[string]repodb.ManifestMetadata{}
 
-	for tag, digest := range repoMeta.Tags {
+	for tag, descriptor := range repoMeta.Tags {
+		digest := descriptor.Digest
+
 		if _, alreadyDownloaded := manifestMetaMap[digest]; alreadyDownloaded {
 			continue
 		}

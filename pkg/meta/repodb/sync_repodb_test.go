@@ -113,13 +113,13 @@ func TestSyncRepoDBWithStorage(t *testing.T) {
 		So(len(repos), ShouldEqual, 1)
 		So(len(repos[0].Tags), ShouldEqual, 2)
 
-		for _, digest := range repos[0].Tags {
-			manifestMeta, err := repoDB.GetManifestMeta(godigest.Digest(digest))
+		for _, descriptor := range repos[0].Tags {
+			manifestMeta, err := repoDB.GetManifestMeta(godigest.Digest(descriptor.Digest))
 			So(err, ShouldBeNil)
 			So(manifestMeta.ManifestBlob, ShouldNotBeNil)
 			So(manifestMeta.ConfigBlob, ShouldNotBeNil)
 
-			if digest == signedManifestDigest.String() {
+			if descriptor.Digest == signedManifestDigest.String() {
 				So(manifestMeta.Signatures, ShouldNotBeEmpty)
 			}
 		}

@@ -65,7 +65,9 @@ func (cveinfo BaseCveInfo) GetImageListForCVE(repo, cveID string) ([]common.TagI
 		return imgList, err
 	}
 
-	for tag, manifestDigestStr := range repoMeta.Tags {
+	for tag, descriptor := range repoMeta.Tags {
+		manifestDigestStr := descriptor.Digest
+
 		manifestDigest, err := godigest.Parse(manifestDigestStr)
 		if err != nil {
 			cveinfo.Log.Error().Err(err).Str("repo", repo).Str("tag", tag).
@@ -109,7 +111,9 @@ func (cveinfo BaseCveInfo) GetImageListWithCVEFixed(repo, cveID string) ([]commo
 	vulnerableTags := make([]common.TagInfo, 0)
 	allTags := make([]common.TagInfo, 0)
 
-	for tag, manifestDigestStr := range repoMeta.Tags {
+	for tag, descriptor := range repoMeta.Tags {
+		manifestDigestStr := descriptor.Digest
+
 		manifestDigest, err := godigest.Parse(manifestDigestStr)
 		if err != nil {
 			cveinfo.Log.Error().Err(err).Str("repo", repo).Str("tag", tag).
