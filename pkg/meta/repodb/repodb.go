@@ -8,17 +8,14 @@ import (
 
 // MetadataDB.
 const (
-	ManifestMetadataBucket = "ManifestMetadata"
-	UserMetadataBucket     = "UserMeta"
-	RepoMetadataBucket     = "RepoMetadata"
+	ManifestDataBucket = "ManifestData"
+	UserMetadataBucket = "UserMeta"
+	RepoMetadataBucket = "RepoMetadata"
 )
 
 type FilterFunc func(repoMeta RepoMetadata, manifestMeta ManifestMetadata) bool
 
 type RepoDB interface { //nolint:interfacebloat
-	// SetRepoDescription sets the repo description
-	SetRepoDescription(repo, description string) error
-
 	// IncrementRepoStars adds 1 to the star count of an image
 	IncrementRepoStars(repo string) error
 
@@ -27,9 +24,6 @@ type RepoDB interface { //nolint:interfacebloat
 
 	// GetRepoStars returns the total number of stars a repo has
 	GetRepoStars(repo string) (int, error)
-
-	// SetRepoLogo sets the path of the repo logo image
-	SetRepoLogo(repo string, logoPath string) error
 
 	// SetRepoTag sets the tag of a manifest in the tag list of a repo
 	SetRepoTag(repo string, tag string, manifestDigest godigest.Digest, mediaType string) error
@@ -45,20 +39,26 @@ type RepoDB interface { //nolint:interfacebloat
 	GetMultipleRepoMeta(ctx context.Context, filter func(repoMeta RepoMetadata) bool, requestedPage PageInput) (
 		[]RepoMetadata, error)
 
+	// SetManifestData sets ManifestData for a given manifest in the database
+	SetManifestData(manifestDigest godigest.Digest, md ManifestData) error
+
+	// GetManifestData return the manifest and it's related config
+	GetManifestData(manifestDigest godigest.Digest) (ManifestData, error)
+
 	// GetManifestMeta returns ManifestMetadata for a given manifest from the database
-	GetManifestMeta(manifestDigest godigest.Digest) (ManifestMetadata, error)
+	GetManifestMeta(repo string, manifestDigest godigest.Digest) (ManifestMetadata, error)
 
 	// GetManifestMeta sets ManifestMetadata for a given manifest in the database
-	SetManifestMeta(manifestDigest godigest.Digest, mm ManifestMetadata) error
+	SetManifestMeta(repo string, manifestDigest godigest.Digest, mm ManifestMetadata) error
 
 	// IncrementManifestDownloads adds 1 to the download count of a manifest
-	IncrementManifestDownloads(manifestDigest godigest.Digest) error
+	IncrementImageDownloads(repo string, reference string) error
 
 	// AddManifestSignature adds signature metadata to a given manifest in the database
-	AddManifestSignature(manifestDigest godigest.Digest, sm SignatureMetadata) error
+	AddManifestSignature(repo string, signedManifestDigest godigest.Digest, sm SignatureMetadata) error
 
 	// DeleteSignature delets signature metadata to a given manifest from the database
-	DeleteSignature(manifestDigest godigest.Digest, sm SignatureMetadata) error
+	DeleteSignature(repo string, signedManifestDigest godigest.Digest, sm SignatureMetadata) error
 
 	// SearchRepos searches for repos given a search string
 	SearchRepos(ctx context.Context, searchText string, filter Filter, requestedPage PageInput) (
@@ -94,28 +94,30 @@ type ManifestMetadata struct {
 	ConfigBlob    []byte
 	DownloadCount int
 	Signatures    map[string][]string
-	Dependencies  []string
-	Dependants    []string
-	BlobsSize     int
-	BlobCount     int
 }
 
-type IndexMetadata struct {
-	Manifests []godigest.Digest
+type ManifestData struct {
+	ManifestBlob []byte
+	ConfigBlob   []byte
 }
 
+// Descriptor represents an image. Multiple images might have the same digests but different tags.
 type Descriptor struct {
 	Digest    string
 	MediaType string
 }
 
+type DescriptorStatistics struct {
+	DownloadCount int
+}
+
 type RepoMetadata struct {
-	Name        string
-	Tags        map[string]Descriptor
-	Signatures  []string
-	Stars       int
-	Description string
-	LogoPath    string
+	Name string
+	Tags map[string]Descriptor
+
+	Statistics map[string]DescriptorStatistics
+	Signatures map[string]map[string][]string
+	Stars      int
 }
 
 type SignatureMetadata struct {

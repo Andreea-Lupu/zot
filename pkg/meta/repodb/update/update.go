@@ -42,7 +42,7 @@ func OnUpdateManifest(name, reference, mediaType string, digest godigest.Digest,
 	metadataSuccessfullySet := true
 
 	if isSignature {
-		err = repoDB.AddManifestSignature(signedManifestDigest, repodb.SignatureMetadata{
+		err = repoDB.AddManifestSignature(name, signedManifestDigest, repodb.SignatureMetadata{
 			SignatureType:   signatureType,
 			SignatureDigest: digest,
 		})
@@ -98,7 +98,7 @@ func OnDeleteManifest(name, reference, mediaType string, digest godigest.Digest,
 	manageRepoMetaSuccessfully := true
 
 	if isSignature {
-		err = repoDB.DeleteSignature(signedManifestDigest, repodb.SignatureMetadata{
+		err = repoDB.DeleteSignature(name, signedManifestDigest, repodb.SignatureMetadata{
 			SignatureDigest: digest,
 			SignatureType:   signatureType,
 		})
@@ -150,7 +150,7 @@ func OnGetManifest(name, reference string, digest godigest.Digest, body []byte,
 	}
 
 	if !isSignature {
-		err := repoDB.IncrementManifestDownloads(digest)
+		err := repoDB.IncrementImageDownloads(name, reference)
 		if err != nil {
 			log.Error().Err(err).Msg("unexpected error")
 
@@ -167,12 +167,17 @@ func OnGetManifest(name, reference string, digest godigest.Digest, body []byte,
 func setMetadataFromInput(repo, reference, mediaType string, digest godigest.Digest, manifestBlob []byte,
 	storeController storage.StoreController, repoDB repodb.RepoDB, log log.Logger,
 ) error {
-	imageMetadata, err := repodb.NewManifestMeta(repo, manifestBlob, storeController)
+	imageMetadata, err := repodb.NewManifestData(repo, manifestBlob, storeController)
 	if err != nil {
 		return err
 	}
 
-	err = repoDB.SetManifestMeta(digest, imageMetadata)
+	err = repoDB.SetManifestMeta(repo, digest, repodb.ManifestMetadata{
+		ManifestBlob:  imageMetadata.ManifestBlob,
+		ConfigBlob:    imageMetadata.ConfigBlob,
+		DownloadCount: 0,
+		Signatures:    map[string][]string{},
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("repodb: error while putting image meta")
 
