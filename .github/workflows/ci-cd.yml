@@ -358,16 +358,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: main
+          ref: test-helm-chart
           fetch-depth: '0'
 
       - name: Checkout project-zot/helm-charts
         uses: actions/checkout@v3
         with:
-          repository: project-zot/helm-charts
-          ref: main
+          repository: Andreea-Lupu/helm-charts
+          ref: ci-cd-checks-v2
           fetch-depth: '0'
-          token: ${{ secrets.HELM_PUSH_TOKEN }}
+          token: ${{ secrets.PUSH_TOKEN }}
           path: ./helm-charts
 
       - name: Configure Git
