@@ -609,8 +609,14 @@ func applyDefaultValues(config *config.Config, viperInstance *viper.Viper) {
 		}
 	}
 
-	if !config.Storage.GC && viperInstance.Get("storage::gcdelay") == nil {
-		config.Storage.GCDelay = 0
+	if !config.Storage.GC {
+		if viperInstance.Get("storage::gcdelay") == nil {
+			config.Storage.GCDelay = 0
+		}
+
+		if viperInstance.Get("storage::gcinterval") == nil {
+			config.Storage.GCInterval = 0
+		}
 	}
 
 	// cache settings
@@ -657,9 +663,18 @@ func applyDefaultValues(config *config.Config, viperInstance *viper.Viper) {
 			}
 		}
 
-		// if gc is enabled and gcDelay is not set, it is set to default value
-		if storageConfig.GC && !viperInstance.IsSet("storage::subpaths::"+name+"::gcdelay") {
-			storageConfig.GCDelay = storageConstants.DefaultGCDelay
+		// if gc is enabled
+		if storageConfig.GC {
+			// and gcDelay is not set, it is set to default value
+			if !viperInstance.IsSet("storage::subpaths::" + name + "::gcdelay") {
+				storageConfig.GCDelay = storageConstants.DefaultGCDelay
+			}
+
+			// and gcInterval is not set, it is set to default value
+			if !viperInstance.IsSet("storage::subpaths::" + name + "::gcinterval") {
+				storageConfig.GCInterval = storageConstants.DefaultGCInterval
+			}
+
 			config.Storage.SubPaths[name] = storageConfig
 		}
 	}

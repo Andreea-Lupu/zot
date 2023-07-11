@@ -684,6 +684,7 @@ func TestMgmtExtension(t *testing.T) {
 		)
 		So(err, ShouldBeNil)
 
+		conf.Storage.GC = false
 		conf.Extensions = &extconf.ExtensionConfig{}
 		conf.Extensions.Search = &extconf.SearchConfig{}
 		conf.Extensions.Search.Enable = &defaultValue
@@ -784,6 +785,16 @@ func TestMgmtExtension(t *testing.T) {
 
 		found, err = test.ReadLogFileAndSearchString(logFile.Name(), "verifying signatures successfully completed",
 			time.Second)
+		So(err, ShouldBeNil)
+		So(found, ShouldBeTrue)
+
+		found, err = test.ReadLogFileAndSearchString(logFile.Name(),
+			"finished generating tasks for updating signatures validity", 10*time.Second)
+		So(err, ShouldBeNil)
+		So(found, ShouldBeTrue)
+
+		found, err = test.ReadLogFileAndSearchString(logFile.Name(), "reset task generator for updating signatures validity",
+			10*time.Second)
 		So(err, ShouldBeNil)
 		So(found, ShouldBeTrue)
 	})

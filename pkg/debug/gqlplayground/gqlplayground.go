@@ -22,9 +22,8 @@ var playgroundHTML embed.FS
 
 // SetupGQLPlaygroundRoutes ...
 func SetupGQLPlaygroundRoutes(conf *config.Config, router *mux.Router,
-	storeController storage.StoreController, l log.Logger,
+	storeController storage.StoreController, log log.Logger,
 ) {
-	log := log.Logger{Logger: l.With().Caller().Timestamp().Logger()}
 	log.Info().Msg("setting up graphql playground route")
 
 	templ, err := template.ParseFS(playgroundHTML, "index.html.tmpl")
