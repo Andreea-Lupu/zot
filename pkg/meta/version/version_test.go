@@ -13,6 +13,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 	"go.etcd.io/bbolt"
 
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/meta/boltdb"
 	mdynamodb "zotregistry.io/zot/pkg/meta/dynamodb"
@@ -30,7 +31,10 @@ func TestVersioningBoltDB(t *testing.T) {
 
 		log := log.NewLogger("debug", "")
 
-		boltdbWrapper, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(boltDBParams.RootDir)
+		So(err, ShouldBeNil)
+
+		boltdbWrapper, err := boltdb.New(boltDriver, sigStore, log)
 		defer os.Remove("repo.db")
 		So(boltdbWrapper, ShouldNotBeNil)
 		So(err, ShouldBeNil)
@@ -134,7 +138,10 @@ func TestVersioningDynamoDB(t *testing.T) {
 
 		log := log.NewLogger("debug", "")
 
-		dynamoWrapper, err := mdynamodb.New(dynamoClient, params, log)
+		sigStore, err := imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		dynamoWrapper, err := mdynamodb.New(dynamoClient, params, sigStore, log)
 		So(err, ShouldBeNil)
 
 		So(dynamoWrapper.ResetManifestDataTable(), ShouldBeNil)

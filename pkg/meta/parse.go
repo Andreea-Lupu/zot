@@ -10,8 +10,8 @@ import (
 
 	zerr "zotregistry.io/zot/errors"
 	zcommon "zotregistry.io/zot/pkg/common"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
-	"zotregistry.io/zot/pkg/meta/signatures"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
 	"zotregistry.io/zot/pkg/storage"
 	storageTypes "zotregistry.io/zot/pkg/storage/types"
@@ -225,9 +225,9 @@ func GetSignatureLayersInfo(repo, tag, manifestDigest, signatureType string, man
 	imageStore storageTypes.ImageStore, log log.Logger,
 ) ([]mTypes.LayerInfo, error) {
 	switch signatureType {
-	case signatures.CosignSignature:
+	case imagetrust.CosignSignature:
 		return getCosignSignatureLayersInfo(repo, tag, manifestDigest, manifestBlob, imageStore, log)
-	case signatures.NotationSignature:
+	case imagetrust.NotationSignature:
 		return getNotationSignatureLayersInfo(repo, manifestDigest, manifestBlob, imageStore, log)
 	default:
 		return []mTypes.LayerInfo{}, nil
@@ -256,7 +256,7 @@ func getCosignSignatureLayersInfo(
 			return layers, err
 		}
 
-		layerSigKey, ok := layer.Annotations[signatures.CosignSigKey]
+		layerSigKey, ok := layer.Annotations[imagetrust.CosignSigKey]
 		if !ok {
 			log.Error().Err(err).Str("repository", repo).Str("reference", tag).Str("layerDigest", layer.Digest.String()).Msg(
 				"load-repo: unable to get specific annotation of cosign signature")

@@ -12,6 +12,7 @@ import (
 	"zotregistry.io/zot/pkg/api"
 	"zotregistry.io/zot/pkg/api/config"
 	extconf "zotregistry.io/zot/pkg/extensions/config"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/extensions/monitoring"
 	"zotregistry.io/zot/pkg/extensions/search/cve/trivy"
 	"zotregistry.io/zot/pkg/log"
@@ -158,7 +159,10 @@ func TestVulnerableLayer(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log)
 		So(err, ShouldBeNil)
 
 		err = meta.ParseStorage(metaDB, storeController, log)

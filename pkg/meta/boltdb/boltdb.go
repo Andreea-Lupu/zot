@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,9 +14,9 @@ import (
 
 	zerr "zotregistry.io/zot/errors"
 	zcommon "zotregistry.io/zot/pkg/common"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/meta/common"
-	"zotregistry.io/zot/pkg/meta/signatures"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
 	"zotregistry.io/zot/pkg/meta/version"
 	localCtx "zotregistry.io/zot/pkg/requestcontext"
@@ -26,11 +25,11 @@ import (
 type BoltDB struct {
 	DB       *bbolt.DB
 	Patches  []func(DB *bbolt.DB) error
-	SigStore *signatures.SigStore
+	SigStore mTypes.SignatureStorage
 	Log      log.Logger
 }
 
-func New(boltDB *bbolt.DB, log log.Logger) (*BoltDB, error) {
+func New(boltDB *bbolt.DB, sigStore mTypes.SignatureStorage, log log.Logger) (*BoltDB, error) {
 	err := boltDB.Update(func(transaction *bbolt.Tx) error {
 		versionBuck, err := transaction.CreateBucketIfNotExists([]byte(VersionBucket))
 		if err != nil {
@@ -69,13 +68,6 @@ func New(boltDB *bbolt.DB, log log.Logger) (*BoltDB, error) {
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	dir := filepath.Dir(boltDB.Path())
-
-	sigStore, err := signatures.NewLocalSigStore(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -883,12 +875,12 @@ func (bdw *BoltDB) AddManifestSignature(repo string, signedManifestDigest godige
 
 		signatureSlice := manifestSignatures[sygMeta.SignatureType]
 		if !common.SignatureAlreadyExists(signatureSlice, sygMeta) {
-			if sygMeta.SignatureType == signatures.NotationSignature {
+			if sygMeta.SignatureType == imagetrust.NotationSignature {
 				signatureSlice = append(signatureSlice, mTypes.SignatureInfo{
 					SignatureManifestDigest: sygMeta.SignatureDigest,
 					LayersInfo:              sygMeta.LayersInfo,
 				})
-			} else if sygMeta.SignatureType == signatures.CosignSignature {
+			} else if sygMeta.SignatureType == imagetrust.CosignSignature {
 				signatureSlice = []mTypes.SignatureInfo{{
 					SignatureManifestDigest: sygMeta.SignatureDigest,
 					LayersInfo:              sygMeta.LayersInfo,

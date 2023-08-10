@@ -17,9 +17,9 @@ import (
 
 	zerr "zotregistry.io/zot/errors"
 	zcommon "zotregistry.io/zot/pkg/common"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/meta/common"
-	"zotregistry.io/zot/pkg/meta/signatures"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
 	"zotregistry.io/zot/pkg/meta/version"
 	localCtx "zotregistry.io/zot/pkg/requestcontext"
@@ -36,16 +36,13 @@ type DynamoDB struct {
 	UserDataTablename     string
 	VersionTablename      string
 	Patches               []func(client *dynamodb.Client, tableNames map[string]string) error
-	SigStore              *signatures.SigStore
+	SigStore              mTypes.SignatureStorage
 	Log                   log.Logger
 }
 
-func New(client *dynamodb.Client, params DBDriverParameters, log log.Logger) (*DynamoDB, error) {
-	sigStore, err := signatures.NewCloudSigStore(params.Region, params.Endpoint)
-	if err != nil {
-		return nil, err
-	}
-
+func New(
+	client *dynamodb.Client, params DBDriverParameters, sigStore mTypes.SignatureStorage, log log.Logger,
+) (*DynamoDB, error) {
 	dynamoWrapper := DynamoDB{
 		Client:                client,
 		RepoMetaTablename:     params.RepoMetaTablename,
@@ -59,7 +56,7 @@ func New(client *dynamodb.Client, params DBDriverParameters, log log.Logger) (*D
 		Log:                   log,
 	}
 
-	err = dynamoWrapper.createVersionTable()
+	err := dynamoWrapper.createVersionTable()
 	if err != nil {
 		return nil, err
 	}
@@ -738,12 +735,12 @@ func (dwr *DynamoDB) AddManifestSignature(repo string, signedManifestDigest godi
 
 	signatureSlice := manifestSignatures[sygMeta.SignatureType]
 	if !common.SignatureAlreadyExists(signatureSlice, sygMeta) {
-		if sygMeta.SignatureType == signatures.NotationSignature {
+		if sygMeta.SignatureType == imagetrust.NotationSignature {
 			signatureSlice = append(signatureSlice, mTypes.SignatureInfo{
 				SignatureManifestDigest: sygMeta.SignatureDigest,
 				LayersInfo:              sygMeta.LayersInfo,
 			})
-		} else if sygMeta.SignatureType == signatures.CosignSignature {
+		} else if sygMeta.SignatureType == imagetrust.CosignSignature {
 			signatureSlice = []mTypes.SignatureInfo{{
 				SignatureManifestDigest: sygMeta.SignatureDigest,
 				LayersInfo:              sygMeta.LayersInfo,

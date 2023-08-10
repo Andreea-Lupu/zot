@@ -1,4 +1,7 @@
-package signatures
+//go:build imagetrust
+// +build imagetrust
+
+package imagetrust
 
 import (
 	"context"
@@ -20,13 +23,6 @@ import (
 	"zotregistry.io/zot/pkg/log"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
 	"zotregistry.io/zot/pkg/scheduler"
-)
-
-const (
-	CosignSignature   = "cosign"
-	NotationSignature = "notation"
-	defaultDirPerms   = 0o700
-	defaultFilePerms  = 0o644
 )
 
 type SigStore struct {

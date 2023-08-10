@@ -12,6 +12,7 @@ import (
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
 
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/extensions/search/convert"
 	cvemodel "zotregistry.io/zot/pkg/extensions/search/cve/model"
 	"zotregistry.io/zot/pkg/extensions/search/gql_generated"
@@ -33,7 +34,10 @@ func TestConvertErrors(t *testing.T) {
 		boltDB, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDB, log.NewLogger("debug", ""))
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDB, sigStore, log.NewLogger("debug", ""))
 		So(err, ShouldBeNil)
 
 		configBlob, err := json.Marshal(ispec.Image{})

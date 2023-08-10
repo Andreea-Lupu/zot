@@ -28,6 +28,7 @@ import (
 	apiErr "zotregistry.io/zot/pkg/api/errors"
 	zcommon "zotregistry.io/zot/pkg/common"
 	extconf "zotregistry.io/zot/pkg/extensions/config"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/extensions/monitoring"
 	cveinfo "zotregistry.io/zot/pkg/extensions/search/cve"
 	cvemodel "zotregistry.io/zot/pkg/extensions/search/cve/model"
@@ -325,7 +326,10 @@ func TestImageFormat(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log)
 		So(err, ShouldBeNil)
 
 		err = meta.ParseStorage(metaDB, storeController, log)
@@ -739,7 +743,10 @@ func TestCVEStruct(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log.NewLogger("debug", ""))
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log.NewLogger("debug", ""))
 		So(err, ShouldBeNil)
 
 		// Create metadb data for scannable image with vulnerabilities

@@ -16,6 +16,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 
 	"zotregistry.io/zot/pkg/common"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	cveinfo "zotregistry.io/zot/pkg/extensions/search/cve"
 	cvemodel "zotregistry.io/zot/pkg/extensions/search/cve/model"
 	"zotregistry.io/zot/pkg/extensions/search/gql_generated"
@@ -1883,7 +1884,10 @@ func TestCVEResolvers(t *testing.T) { //nolint:gocyclo
 
 	log := log.NewLogger("debug", "")
 
-	metaDB, err := boltdb.New(boltDriver, log)
+	sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+	So(err, ShouldBeNil)
+
+	metaDB, err := boltdb.New(boltDriver, sigStore, log)
 	if err != nil {
 		panic(err)
 	}

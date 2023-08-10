@@ -17,6 +17,7 @@ import (
 
 	zerr "zotregistry.io/zot/errors"
 	"zotregistry.io/zot/pkg/common"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/extensions/monitoring"
 	"zotregistry.io/zot/pkg/extensions/search/cve/model"
 	"zotregistry.io/zot/pkg/log"
@@ -99,7 +100,10 @@ func TestMultipleStoragePath(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log)
 		So(err, ShouldBeNil)
 
 		scanner := NewScanner(storeController, metaDB, "ghcr.io/project-zot/trivy-db", "", log)
@@ -199,7 +203,10 @@ func TestTrivyLibraryErrors(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log)
 		So(err, ShouldBeNil)
 
 		err = meta.ParseStorage(metaDB, storeController, log)
@@ -272,7 +279,10 @@ func TestImageScannable(t *testing.T) {
 
 	log := log.NewLogger("debug", "")
 
-	metaDB, err := boltdb.New(boltDriver, log)
+	sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+	So(err, ShouldBeNil)
+
+	metaDB, err := boltdb.New(boltDriver, sigStore, log)
 	if err != nil {
 		panic(err)
 	}
@@ -482,7 +492,10 @@ func TestDefaultTrivyDBUrl(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log)
 		So(err, ShouldBeNil)
 
 		err = meta.ParseStorage(metaDB, storeController, log)

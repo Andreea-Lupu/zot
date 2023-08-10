@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog"
 	. "github.com/smartystreets/goconvey/convey"
 
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
 	mdynamodb "zotregistry.io/zot/pkg/meta/dynamodb"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
@@ -60,7 +61,10 @@ func TestIterator(t *testing.T) {
 		client, err := mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		dynamoWrapper, err := mdynamodb.New(client, params, log)
+		sigStore, err := imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		dynamoWrapper, err := mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldBeNil)
 
 		So(dynamoWrapper.ResetManifestDataTable(), ShouldBeNil)
@@ -164,7 +168,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err := mdynamodb.GetDynamoClient(params) //nolint:contextcheck
 		So(err, ShouldBeNil)
 
-		dynamoWrapper, err := mdynamodb.New(client, params, log) //nolint:contextcheck
+		sigStore, err := imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		dynamoWrapper, err := mdynamodb.New(client, params, sigStore, log) //nolint:contextcheck
 		So(err, ShouldBeNil)
 
 		So(dynamoWrapper.ResetManifestDataTable(), ShouldBeNil) //nolint:contextcheck
@@ -1224,7 +1231,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err := mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err := imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldNotBeNil)
 
 		params = mdynamodb.DBDriverParameters{ //nolint:contextcheck
@@ -1240,7 +1250,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err = mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err = imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldNotBeNil)
 
 		params = mdynamodb.DBDriverParameters{ //nolint:contextcheck
@@ -1256,7 +1269,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err = mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err = imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldNotBeNil)
 
 		params = mdynamodb.DBDriverParameters{ //nolint:contextcheck
@@ -1272,7 +1288,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err = mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err = imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldNotBeNil)
 
 		params = mdynamodb.DBDriverParameters{ //nolint:contextcheck
@@ -1288,7 +1307,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err = mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err = imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldBeNil)
 
 		params = mdynamodb.DBDriverParameters{ //nolint:contextcheck
@@ -1304,7 +1326,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err = mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err = imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldNotBeNil)
 
 		params = mdynamodb.DBDriverParameters{ //nolint:contextcheck
@@ -1320,7 +1345,10 @@ func TestWrapperErrors(t *testing.T) {
 		client, err = mdynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		_, err = mdynamodb.New(client, params, log)
+		sigStore, err = imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		_, err = mdynamodb.New(client, params, sigStore, log)
 		So(err, ShouldNotBeNil)
 	})
 }

@@ -12,6 +12,7 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 
 	zerr "zotregistry.io/zot/errors"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/extensions/monitoring"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/meta"
@@ -41,7 +42,10 @@ func TestOnUpdateManifest(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log)
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log)
 		So(err, ShouldBeNil)
 
 		config, layers, manifest, err := test.GetRandomImageComponents(100) //nolint:staticcheck

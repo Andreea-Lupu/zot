@@ -1,4 +1,7 @@
-package signatures
+//go:build imagetrust
+// +build imagetrust
+
+package imagetrust
 
 import (
 	"bytes"
@@ -23,10 +26,7 @@ import (
 	zerr "zotregistry.io/zot/errors"
 )
 
-const (
-	CosignSigKey          = "dev.cosignproject.cosign/signature"
-	cosignDirRelativePath = "_cosign"
-)
+const cosignDirRelativePath = "_cosign"
 
 type PublicKeyLocalStorage struct {
 	cosignDir string

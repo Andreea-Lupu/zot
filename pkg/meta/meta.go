@@ -6,6 +6,7 @@ import (
 
 	"zotregistry.io/zot/errors"
 	"zotregistry.io/zot/pkg/api/config"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/meta/boltdb"
 	mdynamodb "zotregistry.io/zot/pkg/meta/dynamodb"
@@ -46,7 +47,17 @@ func Create(dbtype string, dbDriver, parameters interface{}, log log.Logger, //n
 				panic("failed type assertion")
 			}
 
-			return boltdb.New(properDriver, log)
+			properParameters, ok := parameters.(boltdb.DBParameters)
+			if !ok {
+				panic("failed type assertion")
+			}
+
+			sigStore, err := imagetrust.NewLocalSigStore(properParameters.RootDir)
+			if err != nil {
+				return nil, err
+			}
+
+			return boltdb.New(properDriver, sigStore, log)
 		}
 	case "dynamodb":
 		{
@@ -60,7 +71,12 @@ func Create(dbtype string, dbDriver, parameters interface{}, log log.Logger, //n
 				panic("failed type assertion")
 			}
 
-			return mdynamodb.New(properDriver, properParameters, log)
+			sigStore, err := imagetrust.NewCloudSigStore(properParameters.Region, properParameters.Endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			return mdynamodb.New(properDriver, properParameters, sigStore, log)
 		}
 	default:
 		{

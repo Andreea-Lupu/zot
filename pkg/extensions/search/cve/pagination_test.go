@@ -14,6 +14,7 @@ import (
 	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
 
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	cveinfo "zotregistry.io/zot/pkg/extensions/search/cve"
 	cvemodel "zotregistry.io/zot/pkg/extensions/search/cve/model"
 	"zotregistry.io/zot/pkg/log"
@@ -30,7 +31,10 @@ func TestCVEPagination(t *testing.T) {
 		boltDriver, err := boltdb.GetBoltDriver(params)
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDriver, log.NewLogger("debug", ""))
+		sigStore, err := imagetrust.NewLocalSigStore(params.RootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDriver, sigStore, log.NewLogger("debug", ""))
 		So(err, ShouldBeNil)
 
 		// Create metadb data for scannable image with vulnerabilities

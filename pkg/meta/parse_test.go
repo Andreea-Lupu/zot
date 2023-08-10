@@ -14,12 +14,12 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 
 	zerr "zotregistry.io/zot/errors"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/extensions/monitoring"
 	"zotregistry.io/zot/pkg/log"
 	"zotregistry.io/zot/pkg/meta"
 	"zotregistry.io/zot/pkg/meta/boltdb"
 	"zotregistry.io/zot/pkg/meta/dynamodb"
-	"zotregistry.io/zot/pkg/meta/signatures"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
 	"zotregistry.io/zot/pkg/storage"
 	"zotregistry.io/zot/pkg/storage/local"
@@ -357,7 +357,10 @@ func TestParseStorageWithBoltDB(t *testing.T) {
 		})
 		So(err, ShouldBeNil)
 
-		metaDB, err := boltdb.New(boltDB, log.NewLogger("debug", ""))
+		sigStore, err := imagetrust.NewLocalSigStore(rootDir)
+		So(err, ShouldBeNil)
+
+		metaDB, err := boltdb.New(boltDB, sigStore, log.NewLogger("debug", ""))
 		So(err, ShouldBeNil)
 
 		RunParseStorageTests(rootDir, metaDB)
@@ -384,7 +387,10 @@ func TestParseStorageDynamoWrapper(t *testing.T) {
 		dynamoClient, err := dynamodb.GetDynamoClient(params)
 		So(err, ShouldBeNil)
 
-		dynamoWrapper, err := dynamodb.New(dynamoClient, params, log.NewLogger("debug", ""))
+		sigStore, err := imagetrust.NewCloudSigStore(params.Region, params.Endpoint)
+		So(err, ShouldBeNil)
+
+		dynamoWrapper, err := dynamodb.New(dynamoClient, params, sigStore, log.NewLogger("debug", ""))
 		So(err, ShouldBeNil)
 
 		err = dynamoWrapper.ResetManifestDataTable()
@@ -611,11 +617,11 @@ func TestGetSignatureLayersInfo(t *testing.T) {
 	})
 
 	Convey("error while unmarshaling manifest content", t, func() {
-		_, err := meta.GetSignatureLayersInfo("repo", "tag", "123", signatures.CosignSignature, []byte("bad manifest"),
+		_, err := meta.GetSignatureLayersInfo("repo", "tag", "123", imagetrust.CosignSignature, []byte("bad manifest"),
 			nil, log.NewLogger("debug", ""))
 		So(err, ShouldNotBeNil)
 
-		_, err = meta.GetSignatureLayersInfo("repo", "tag", "123", signatures.NotationSignature, []byte("bad manifest"),
+		_, err = meta.GetSignatureLayersInfo("repo", "tag", "123", imagetrust.NotationSignature, []byte("bad manifest"),
 			nil, log.NewLogger("debug", ""))
 		So(err, ShouldNotBeNil)
 	})

@@ -15,8 +15,8 @@ import (
 	"zotregistry.io/zot/pkg/api/config"
 	"zotregistry.io/zot/pkg/api/constants"
 	zcommon "zotregistry.io/zot/pkg/common"
+	"zotregistry.io/zot/pkg/extensions/imagetrust"
 	"zotregistry.io/zot/pkg/log"
-	"zotregistry.io/zot/pkg/meta/signatures"
 	mTypes "zotregistry.io/zot/pkg/meta/types"
 	"zotregistry.io/zot/pkg/scheduler"
 )
@@ -34,7 +34,7 @@ func SetupImageTrustRoutes(conf *config.Config, metaDB mTypes.MetaDB, router *mu
 
 	log.Info().Msg("setting up image trust routes")
 
-	sigStore, _ := metaDB.SignatureStorage().(*signatures.SigStore)
+	sigStore, _ := metaDB.SignatureStorage().(*imagetrust.SigStore)
 	trust := ImageTrust{Conf: conf, SigStore: sigStore, Log: log}
 	allowedMethods := zcommon.AllowedMethods(http.MethodPost)
 
@@ -67,7 +67,7 @@ func SetupImageTrustRoutes(conf *config.Config, metaDB mTypes.MetaDB, router *mu
 
 type ImageTrust struct {
 	Conf     *config.Config
-	SigStore *signatures.SigStore
+	SigStore *imagetrust.SigStore
 	Log      log.Logger
 }
 
@@ -90,7 +90,7 @@ func (trust *ImageTrust) HandleCosignPublicKeyUpload(response http.ResponseWrite
 		return
 	}
 
-	err = signatures.UploadPublicKey(trust.SigStore.CosignStorage, body)
+	err = imagetrust.UploadPublicKey(trust.SigStore.CosignStorage, body)
 	if err != nil {
 		if errors.Is(err, zerr.ErrInvalidPublicKeyContent) {
 			response.WriteHeader(http.StatusBadRequest)
@@ -148,7 +148,7 @@ func (trust *ImageTrust) HandleNotationCertificateUpload(response http.ResponseW
 		return
 	}
 
-	err = signatures.UploadCertificate(trust.SigStore.NotationStorage, body, truststoreType, truststoreName)
+	err = imagetrust.UploadCertificate(trust.SigStore.NotationStorage, body, truststoreType, truststoreName)
 	if err != nil {
 		if errors.Is(err, zerr.ErrInvalidTruststoreType) ||
 			errors.Is(err, zerr.ErrInvalidTruststoreName) ||
@@ -172,7 +172,7 @@ func EnableImageTrustVerification(conf *config.Config, taskScheduler *scheduler.
 		return
 	}
 
-	generator := signatures.NewTaskGenerator(metaDB, log)
+	generator := imagetrust.NewTaskGenerator(metaDB, log)
 
 	numberOfHours := 2
 	interval := time.Duration(numberOfHours) * time.Hour
