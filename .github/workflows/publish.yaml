@@ -37,14 +37,14 @@ jobs:
             OS=${{ matrix.os }}
             ARCH=${{ matrix.arch }}
             REPO_NAME=zot-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run zot container image with docker
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            docker run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
+            docker run -d -p 5000:5000 ghcr.io/andreea-lupu/zot-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
             sleep 2
             curl --connect-timeout 5 \
               --max-time 10 \
@@ -60,7 +60,7 @@ jobs:
       - name: Run zot container image with podman
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            podman run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
+            podman run -d -p 5000:5000 ghcr.io/andreea-lupu/zot-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
             sleep 2
             curl --connect-timeout 5 \
               --max-time 10 \
@@ -84,14 +84,14 @@ jobs:
             ARCH=${{ matrix.arch }}
             EXT=-minimal
             REPO_NAME=zot-minimal-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run zot-minimal container image with docker
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            docker run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
+            docker run -d -p 5000:5000 ghcr.io/andreea-lupu/zot-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
             sleep 2
             curl --connect-timeout 5 \
               --max-time 10 \
@@ -107,7 +107,7 @@ jobs:
       - name: Run zot-minimal container image with podman
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            podman run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
+            podman run -d -p 5000:5000 ghcr.io/andreea-lupu/zot-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
             sleep 2
             curl --connect-timeout 5 \
               --max-time 10 \
@@ -130,14 +130,14 @@ jobs:
             OS=${{ matrix.os }}
             ARCH=${{ matrix.arch }}
             REPO_NAME=zxp-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run zot-exporter container image with docker
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            docker run -d -p 5001:5001 ghcr.io/${{ github.repository_owner }}/zxp-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
+            docker run -d -p 5001:5001 ghcr.io/andreea-lupu/zxp-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
             sleep 2
             curl --connect-timeout 5 \
               --max-time 10 \
@@ -153,7 +153,7 @@ jobs:
       - name: Run zot-exporter container image with podman
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            podman run -d -p 5001:5001 ghcr.io/${{ github.repository_owner }}/zxp-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
+            podman run -d -p 5001:5001 ghcr.io/andreea-lupu/zxp-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}
             sleep 2
             curl --connect-timeout 5 \
               --max-time 10 \
@@ -176,14 +176,14 @@ jobs:
             OS=${{ matrix.os }}
             ARCH=${{ matrix.arch }}
             REPO_NAME=zb-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run zb container image with docker
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            docker run ghcr.io/${{ github.repository_owner }}/zb-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }} --help
+            docker run ghcr.io/andreea-lupu/zb-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }} --help
           fi
         env:
           OS: ${{ matrix.os }}
@@ -191,36 +191,14 @@ jobs:
       - name: Run zb container image with podman
         run: |
           if [[ $OS == "linux" && $ARCH == "amd64" ]]; then
-            podman run ghcr.io/${{ github.repository_owner }}/zb-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }} --help
+            podman run ghcr.io/andreea-lupu/zb-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }} --help
           fi
         env:
           OS: ${{ matrix.os }}
           ARCH: ${{ matrix.arch }}
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository }}-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Trivy vulnerability scanner (minimal)
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository }}-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2.22.7
-        with:
-          sarif_file: 'trivy-results.sarif'
 
   update-helm-chart:
-    if: github.event_name == 'release' && github.event.action== 'published'
+    if: github.event_name == 'release' && github.event.action == 'published'
     needs: push-image
     name: Update Helm Chart
     permissions:
@@ -230,16 +208,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: fix_update_helm_chart
           fetch-depth: '0'
 
       - name: Checkout project-zot/helm-charts
         uses: actions/checkout@v4
         with:
-          repository: project-zot/helm-charts
-          ref: main
+          repository: Andreea-Lupu/helm-charts
+          ref: test-fix-main
           fetch-depth: '0'
-          token: ${{ secrets.HELM_PUSH_TOKEN }}
+          token: ${{ secrets.PUSH_TOKEN }}
           path: ./helm-charts
 
       - name: Configure Git
@@ -253,7 +231,16 @@ jobs:
       - name: Update image tag
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm-charts/charts/zot/values.yaml'
+          cmd: |
+            yq e '.image.tag = "${{ github.event.release.tag_name }}"' 'helm-charts/charts/zot/values.yaml' > values-updated.yaml
+      - name: Patch values.yaml file
+        run: |
+          ls
+          cat ./values-updated.yaml
+          diff -b 'helm-charts/charts/zot/values.yaml' values-updated.yaml > values.diff
+          cat ./values.diff
+          patch 'helm-charts/charts/zot/values.yaml' < values.diff
+          rm values-updated.yaml values.diff
       - name: Update version
         run: |
           sudo apt-get install pip
