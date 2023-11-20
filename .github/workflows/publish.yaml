@@ -220,7 +220,7 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
   update-helm-chart:
-    if: github.event_name == 'release' && github.event.action== 'published'
+    if: github.event_name == 'release' && github.event.action == 'published'
     needs: push-image
     name: Update Helm Chart
     permissions:
@@ -236,10 +236,10 @@ jobs:
       - name: Checkout project-zot/helm-charts
         uses: actions/checkout@v4
         with:
-          repository: project-zot/helm-charts
-          ref: main
+          repository: Andreea-Lupu/helm-charts
+          ref: test-fix-main
           fetch-depth: '0'
-          token: ${{ secrets.HELM_PUSH_TOKEN }}
+          token: ${{ secrets.PUSH_TOKEN }}
           path: ./helm-charts
 
       - name: Configure Git
@@ -253,7 +253,11 @@ jobs:
       - name: Update image tag
         uses: mikefarah/yq@master
         with:
-          cmd: yq -i '.image.tag = "${{ github.event.release.tag_name }}"' 'helm-charts/charts/zot/values.yaml'
+          cmd: |
+            yq e '.image.tag = "${{ github.event.release.tag_name }}"' 'helm-charts/charts/zot/values.yaml' > values-updated.yaml
+            diff -b helm-charts/charts/zot/values.yaml values-updated.yaml > values.diff
+            patch helm-charts/charts/zot/values.yaml < values.diff
+            rm values-updated.yaml values.diff
       - name: Update version
         run: |
           sudo apt-get install pip
