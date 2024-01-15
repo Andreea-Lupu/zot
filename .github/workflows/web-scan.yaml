@@ -2,7 +2,7 @@ name: 'Security web scan for zot'
 on:
   push:
     branches:
-      - main
+      - update_zui_version_test
   pull_request:
     branches:
       - main
