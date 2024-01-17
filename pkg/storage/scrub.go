@@ -88,23 +88,7 @@ func CheckImageStoreBlobsIntegrity(ctx context.Context, imgStore storageTypes.Im
 func CheckRepo(ctx context.Context, imageName string, imgStore storageTypes.ImageStore) ([]ScrubImageResult, error) {
 	results := []ScrubImageResult{}
 
-	var lockLatency time.Time
-
-	imgStore.RLock(&lockLatency)
-	defer imgStore.RUnlock(&lockLatency)
-
-	// check image structure / layout
-	ok, err := imgStore.ValidateRepo(imageName)
-	if err != nil {
-		return results, err
-	}
-
-	if !ok {
-		return results, errors.ErrRepoBadLayout
-	}
-
-	// check "index.json" content
-	indexContent, err := imgStore.GetIndexContent(imageName)
+	indexContent, err := getIndex(imgStore, imageName)
 	if err != nil {
 		return results, err
 	}
@@ -121,17 +105,39 @@ func CheckRepo(ctx context.Context, imageName string, imgStore storageTypes.Imag
 			return results, ctx.Err()
 		}
 
-		tag := manifest.Annotations[ispec.AnnotationRefName]
-		scrubManifest(ctx, manifest, imgStore, imageName, tag, scrubbedManifests)
-		results = append(results, scrubbedManifests[manifest.Digest])
+		checkImage(ctx, manifest, imgStore, imageName, scrubbedManifests)
+
+		if manifestRes, ok := scrubbedManifests[manifest.Digest]; ok {
+			results = append(results, manifestRes)
+		}
 	}
 
 	return results, nil
 }
 
+func checkImage(
+	ctx context.Context, manifest ispec.Descriptor, imgStore storageTypes.ImageStore, imageName string,
+	scrubbedManifests map[godigest.Digest]ScrubImageResult,
+) {
+	var lockLatency time.Time
+
+	imgStore.RLock(&lockLatency)
+	defer imgStore.RUnlock(&lockLatency)
+
+	tag := manifest.Annotations[ispec.AnnotationRefName]
+
+	buf, err := imgStore.GetBlobContent(imageName, manifest.Digest)
+	if err != nil {
+		// ignore if the manifest is not found(probably it was deleted after we got the list of manifests)
+		return
+	}
+
+	scrubManifest(ctx, manifest, imgStore, imageName, tag, buf, scrubbedManifests)
+}
+
 func scrubManifest(
 	ctx context.Context, manifest ispec.Descriptor, imgStore storageTypes.ImageStore, imageName, tag string,
-	scrubbedManifests map[godigest.Digest]ScrubImageResult,
+	manifestContent []byte, scrubbedManifests map[godigest.Digest]ScrubImageResult,
 ) {
 	res, ok := scrubbedManifests[manifest.Digest]
 	if ok {
@@ -143,16 +149,8 @@ func scrubManifest(
 
 	switch manifest.MediaType {
 	case ispec.MediaTypeImageIndex:
-		buf, err := imgStore.GetBlobContent(imageName, manifest.Digest)
-		if err != nil {
-			imgRes := getResult(imageName, tag, manifest.Digest, errors.ErrBadBlobDigest)
-			scrubbedManifests[manifest.Digest] = imgRes
-
-			return
-		}
-
 		var idx ispec.Index
-		if err := json.Unmarshal(buf, &idx); err != nil {
+		if err := json.Unmarshal(manifestContent, &idx); err != nil {
 			imgRes := getResult(imageName, tag, manifest.Digest, errors.ErrBadBlobDigest)
 			scrubbedManifests[manifest.Digest] = imgRes
 
@@ -161,12 +159,18 @@ func scrubManifest(
 
 		// check all manifests
 		for _, man := range idx.Manifests {
-			scrubManifest(ctx, man, imgStore, imageName, tag, scrubbedManifests)
+			buf, err := imgStore.GetBlobContent(imageName, man.Digest)
+			if err != nil {
+				imgRes := getResult(imageName, tag, man.Digest, err)
+				scrubbedManifests[man.Digest] = imgRes
+
+				continue
+			}
+
+			scrubManifest(ctx, man, imgStore, imageName, tag, buf, scrubbedManifests)
 
 			// if the manifest is affected then this index is also affected
-			if scrubbedManifests[man.Digest].Error != "" {
-				mRes := scrubbedManifests[man.Digest]
-
+			if mRes, ok := scrubbedManifests[man.Digest]; ok && mRes.Error != "" {
 				scrubbedManifests[manifest.Digest] = newScrubImageResult(imageName, tag, mRes.Status,
 					mRes.AffectedBlob, mRes.Error)
 
@@ -174,20 +178,28 @@ func scrubManifest(
 			}
 		}
 
-		// at this point, before starting to check de subject we can consider the index is ok
+		// at this point, before starting to check the subject we can consider the index is ok
 		scrubbedManifests[manifest.Digest] = getResult(imageName, tag, "", nil)
 
 		// check subject if exists
 		if idx.Subject != nil {
-			scrubManifest(ctx, *idx.Subject, imgStore, imageName, tag, scrubbedManifests)
+			buf, err := imgStore.GetBlobContent(imageName, idx.Subject.Digest)
+			if err != nil {
+				imgRes := getResult(imageName, tag, idx.Subject.Digest, err)
+				scrubbedManifests[idx.Subject.Digest] = imgRes
 
-			subjectRes := scrubbedManifests[idx.Subject.Digest]
+				return
+			}
 
-			scrubbedManifests[manifest.Digest] = newScrubImageResult(imageName, tag, subjectRes.Status,
-				subjectRes.AffectedBlob, subjectRes.Error)
+			scrubManifest(ctx, *idx.Subject, imgStore, imageName, tag, buf, scrubbedManifests)
+
+			if subjectRes, ok := scrubbedManifests[idx.Subject.Digest]; ok {
+				scrubbedManifests[manifest.Digest] = newScrubImageResult(imageName, tag, subjectRes.Status,
+					subjectRes.AffectedBlob, subjectRes.Error)
+			}
 		}
 	case ispec.MediaTypeImageManifest:
-		imgRes := CheckIntegrity(ctx, imageName, tag, manifest, imgStore)
+		imgRes := CheckIntegrity(ctx, imageName, tag, manifest, manifestContent, imgStore)
 		scrubbedManifests[manifest.Digest] = imgRes
 
 		// if integrity ok then check subject if exists
@@ -199,12 +211,20 @@ func scrubManifest(
 			_ = json.Unmarshal(manifestContent, &man)
 
 			if man.Subject != nil {
-				scrubManifest(ctx, *man.Subject, imgStore, imageName, tag, scrubbedManifests)
+				buf, err := imgStore.GetBlobContent(imageName, man.Subject.Digest)
+				if err != nil {
+					imgRes := getResult(imageName, tag, man.Subject.Digest, err)
+					scrubbedManifests[man.Subject.Digest] = imgRes
 
-				subjectRes := scrubbedManifests[man.Subject.Digest]
+					return
+				}
 
-				scrubbedManifests[manifest.Digest] = newScrubImageResult(imageName, tag, subjectRes.Status,
-					subjectRes.AffectedBlob, subjectRes.Error)
+				scrubManifest(ctx, *man.Subject, imgStore, imageName, tag, buf, scrubbedManifests)
+
+				if subjectRes, ok := scrubbedManifests[man.Subject.Digest]; ok {
+					scrubbedManifests[manifest.Digest] = newScrubImageResult(imageName, tag, subjectRes.Status,
+						subjectRes.AffectedBlob, subjectRes.Error)
+				}
 			}
 		}
 	default:
@@ -213,33 +233,29 @@ func scrubManifest(
 }
 
 func CheckIntegrity(
-	ctx context.Context, imageName, tagName string, manifest ispec.Descriptor, imgStore storageTypes.ImageStore,
+	ctx context.Context, imageName, tagName string, manifest ispec.Descriptor, manifestContent []byte,
+	imgStore storageTypes.ImageStore,
 ) ScrubImageResult {
 	// check manifest and config
-	if affectedBlob, err := CheckManifestAndConfig(imageName, manifest, imgStore); err != nil {
+	if affectedBlob, err := CheckManifestAndConfig(imageName, manifest, manifestContent, imgStore); err != nil {
 		return getResult(imageName, tagName, affectedBlob, err)
 	}
 
 	// check layers
-	return CheckLayers(ctx, imageName, tagName, manifest, imgStore)
+	return CheckLayers(ctx, imageName, tagName, manifest, manifestContent, imgStore)
 }
 
 func CheckManifestAndConfig(
-	imageName string, manifestDesc ispec.Descriptor, imgStore storageTypes.ImageStore,
+	imageName string, manifestDesc ispec.Descriptor, manifestContent []byte, imgStore storageTypes.ImageStore,
 ) (godigest.Digest, error) {
 	// Q oras artifacts?
 	if manifestDesc.MediaType != ispec.MediaTypeImageManifest {
 		return manifestDesc.Digest, errors.ErrBadManifest
 	}
 
-	manifestContent, err := imgStore.GetBlobContent(imageName, manifestDesc.Digest)
-	if err != nil {
-		return manifestDesc.Digest, err
-	}
-
 	var manifest ispec.Manifest
 
-	err = json.Unmarshal(manifestContent, &manifest)
+	err := json.Unmarshal(manifestContent, &manifest)
 	if err != nil {
 		return manifestDesc.Digest, errors.ErrBadManifest
 	}
@@ -260,19 +276,13 @@ func CheckManifestAndConfig(
 }
 
 func CheckLayers(
-	ctx context.Context, imageName, tagName string, manifest ispec.Descriptor, imgStore storageTypes.ImageStore,
+	ctx context.Context, imageName, tagName string, manifest ispec.Descriptor, manifestContent []byte,
+	imgStore storageTypes.ImageStore,
 ) ScrubImageResult {
 	imageRes := ScrubImageResult{}
 
-	buf, err := imgStore.GetBlobContent(imageName, manifest.Digest)
-	if err != nil {
-		imageRes = getResult(imageName, tagName, manifest.Digest, err)
-
-		return imageRes
-	}
-
 	var man ispec.Manifest
-	if err := json.Unmarshal(buf, &man); err != nil {
+	if err := json.Unmarshal(manifestContent, &man); err != nil {
 		imageRes = getResult(imageName, tagName, manifest.Digest, errors.ErrBadManifest)
 
 		return imageRes
@@ -289,6 +299,31 @@ func CheckLayers(
 	}
 
 	return imageRes
+}
+
+func getIndex(imgStore storageTypes.ImageStore, imageName string) ([]byte, error) {
+	var lockLatency time.Time
+
+	imgStore.RLock(&lockLatency)
+	defer imgStore.RUnlock(&lockLatency)
+
+	// check image structure / layout
+	ok, err := imgStore.ValidateRepo(imageName)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	if !ok {
+		return []byte{}, errors.ErrRepoBadLayout
+	}
+
+	// check "index.json" content
+	indexContent, err := imgStore.GetIndexContent(imageName)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return indexContent, nil
 }
 
 func getResult(imageName, tag string, affectedBlobDigest godigest.Digest, err error) ScrubImageResult {

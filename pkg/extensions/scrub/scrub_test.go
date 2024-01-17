@@ -5,12 +5,14 @@ package scrub_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"testing"
 	"time"
 
+	ispec "github.com/opencontainers/image-spec/specs-go/v1"
 	. "github.com/smartystreets/goconvey/convey"
 
 	"zotregistry.io/zot/pkg/api"
@@ -113,7 +115,13 @@ func TestScrubExtension(t *testing.T) {
 
 		manifestDigest := image.ManifestDescriptor.Digest
 
-		err = os.Remove(path.Join(dir, repoName, "blobs/sha256", manifestDigest.Encoded()))
+		man, _, _, err := srcStorageCtlr.GetDefaultImageStore().GetImageManifest(repoName, manifestDigest.String())
+
+		var manifestContent ispec.Manifest
+		err = json.Unmarshal(man, &manifestContent)
+		So(err, ShouldBeNil)
+
+		err = os.Remove(path.Join(dir, repoName, "blobs/sha256", manifestContent.Layers[0].Digest.Encoded()))
 		if err != nil {
 			panic(err)
 		}
@@ -242,7 +250,13 @@ func TestRunScrubRepo(t *testing.T) {
 
 		manifestDigest := image.ManifestDescriptor.Digest
 
-		err = os.Remove(path.Join(dir, repoName, "blobs/sha256", manifestDigest.Encoded()))
+		man, _, _, err := srcStorageCtlr.GetDefaultImageStore().GetImageManifest(repoName, manifestDigest.String())
+
+		var manifestContent ispec.Manifest
+		err = json.Unmarshal(man, &manifestContent)
+		So(err, ShouldBeNil)
+
+		err = os.Remove(path.Join(dir, repoName, "blobs/sha256", manifestContent.Layers[0].Digest.Encoded()))
 		if err != nil {
 			panic(err)
 		}
