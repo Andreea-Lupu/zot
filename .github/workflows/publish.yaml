@@ -36,7 +36,7 @@ jobs:
             OS=${{ matrix.os }}
             ARCH=${{ matrix.arch }}
             REPO_NAME=zot-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -51,7 +51,7 @@ jobs:
             ARCH=${{ matrix.arch }}
             EXT=-minimal
             REPO_NAME=zot-minimal-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -65,7 +65,7 @@ jobs:
             OS=${{ matrix.os }}
             ARCH=${{ matrix.arch }}
             REPO_NAME=zxp-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -79,7 +79,7 @@ jobs:
             OS=${{ matrix.os }}
             ARCH=${{ matrix.arch }}
             REPO_NAME=zb-${{ matrix.os }}-${{ matrix.arch }}
-          url: docker://ghcr.io/${{ github.repository_owner }}
+          url: docker://ghcr.io/andreea-lupu
           tags: ${{ github.event.release.tag_name }} latest
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -109,7 +109,7 @@ jobs:
           cd $GITHUB_WORKSPACE
           make check-blackbox-prerequisites
           export PATH=${PATH}:${GITHUB_WORKSPACE}/hack/tools/bin
-          ./scripts/build_multiarch_image.sh --registry ghcr.io/${{ github.repository_owner }} \
+          ./scripts/build_multiarch_image.sh --registry ghcr.io/andreea-lupu \
             --source-tag ${{ github.event.release.tag_name }} \
             --destination-tags "${{ github.event.release.tag_name }} latest" \
             --file build/multiarch-${{ matrix.image }}.json
@@ -129,7 +129,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run zot container image with docker
         run: |
-          docker run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot:${{ github.event.release.tag_name }}
+          docker run -d -p 5000:5000 ghcr.io/andreea-lupu/zot:${{ github.event.release.tag_name }}
           sleep 2
           curl --connect-timeout 5 \
             --max-time 10 \
@@ -140,7 +140,7 @@ jobs:
           docker kill $(docker ps -q)
       - name: Run zot container image with podman
         run: |
-          podman run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot:${{ github.event.release.tag_name }}
+          podman run -d -p 5000:5000 ghcr.io/andreea-lupu/zot:${{ github.event.release.tag_name }}
           sleep 2
           curl --connect-timeout 5 \
             --max-time 10 \
@@ -151,7 +151,7 @@ jobs:
           podman kill --all
       - name: Run zot-minimal container image with docker
         run: |
-          docker run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot-minimal:${{ github.event.release.tag_name }}
+          docker run -d -p 5000:5000 ghcr.io/andreea-lupu/zot-minimal:${{ github.event.release.tag_name }}
           sleep 2
           curl --connect-timeout 5 \
             --max-time 10 \
@@ -162,7 +162,7 @@ jobs:
           docker kill $(docker ps -q)
       - name: Run zot-minimal container image with podman
         run: |
-          podman run -d -p 5000:5000 ghcr.io/${{ github.repository_owner }}/zot-minimal:${{ github.event.release.tag_name }}
+          podman run -d -p 5000:5000 ghcr.io/andreea-lupu/zot-minimal:${{ github.event.release.tag_name }}
           sleep 2
           curl --connect-timeout 5 \
             --max-time 10 \
@@ -173,7 +173,7 @@ jobs:
           podman kill --all
       - name: Run zot-exporter container image with docker
         run: |
-          docker run -d -p 5001:5001 ghcr.io/${{ github.repository_owner }}/zxp:${{ github.event.release.tag_name }}
+          docker run -d -p 5001:5001 ghcr.io/andreea-lupu/zxp:${{ github.event.release.tag_name }}
           sleep 2
           curl --connect-timeout 5 \
             --max-time 10 \
@@ -184,7 +184,7 @@ jobs:
           docker kill $(docker ps -q)
       - name: Run zot-exporter container image with podman
         run: |
-          podman run -d -p 5001:5001 ghcr.io/${{ github.repository_owner }}/zxp:${{ github.event.release.tag_name }}
+          podman run -d -p 5001:5001 ghcr.io/andreea-lupu/zxp:${{ github.event.release.tag_name }}
           sleep 2
           curl --connect-timeout 5 \
             --max-time 10 \
@@ -195,10 +195,10 @@ jobs:
           podman kill --all
       - name: Run zb container image with docker
         run: |
-          docker run ghcr.io/${{ github.repository_owner }}/zb:${{ github.event.release.tag_name }} --help
+          docker run ghcr.io/andreea-lupu/zb:${{ github.event.release.tag_name }} --help
       - name: Run zb container image with podman
         run: |
-          podman run ghcr.io/${{ github.repository_owner }}/zb:${{ github.event.release.tag_name }} --help
+          podman run ghcr.io/andreea-lupu/zb:${{ github.event.release.tag_name }} --help
 
   scan-image:
     name: Run Trivy scan on OCI images published to GitHub Packages
@@ -221,7 +221,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/zot-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}'
+          image-ref: 'ghcr.io/andreea-lupu/zot-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
         env:
@@ -230,7 +230,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (minimal)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/zot-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}'
+          image-ref: 'ghcr.io/andreea-lupu/zot-minimal-${{ matrix.os }}-${{ matrix.arch }}:${{ github.event.release.tag_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
         env:
@@ -258,7 +258,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/zot:${{ github.event.release.tag_name }}'
+          image-ref: 'ghcr.io/andreea-lupu/zot:${{ github.event.release.tag_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
         env:
@@ -267,7 +267,7 @@ jobs:
       - name: Run Trivy vulnerability scanner (minimal)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/zot-minimal:${{ github.event.release.tag_name }}'
+          image-ref: 'ghcr.io/andreea-lupu/zot-minimal:${{ github.event.release.tag_name }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
         env:
