@@ -295,7 +295,7 @@ jobs:
       - name: Checkout project-zot/helm-charts
         uses: actions/checkout@v4
         with:
-          repository: project-zot/helm-charts
+          repository: Andreea-Lupu/helm-charts
           ref: main
           fetch-depth: '0'
           token: ${{ secrets.HELM_PUSH_TOKEN }}
